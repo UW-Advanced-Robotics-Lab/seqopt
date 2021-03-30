@@ -7,6 +7,7 @@ from stable_baselines3.common.type_aliases import ReplayBufferSamples
 from stable_baselines3.common.utils import get_device
 import torch as th
 
+
 class OptionsReplayBuffer:
     def __init__(self,
                  buffer_size: int,
@@ -78,6 +79,10 @@ class OptionsReplayBuffer:
             self.rewards[batch_inds],
         )
         return ReplayBufferSamples(*tuple(map(self.to_torch, data)))
+
+    @staticmethod
+    def merge_samples(samples_1: ReplayBufferSamples, samples_2: ReplayBufferSamples):
+        return ReplayBufferSamples(*tuple([th.cat([v1, v2]) for v1, v2 in zip(samples_1, samples_2)]))
 
     def to_torch(self, array: np.ndarray, copy: bool = True) -> th.Tensor:
         """

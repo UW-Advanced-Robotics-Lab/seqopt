@@ -48,7 +48,7 @@ class CriticParams:
 @dataclass
 class TerminatorParams:
     observation_mask: Optional[Union[Iterable[Union[int, bool]], slice]] = None
-    lr_schedule: Union[float, Schedule] = 1e-5
+    lr_schedule: Union[float, Schedule] = 3e-6
     net_arch: Optional[List[int]] = None
     use_boltzmann: bool = True     # Use Boltzmann (Softmax) distribution to compute probabilities for termination
     ent_coef: float = 0.0

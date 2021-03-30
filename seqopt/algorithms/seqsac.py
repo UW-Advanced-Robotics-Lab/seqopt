@@ -4,11 +4,12 @@ import io
 import os
 import pathlib
 import time
-from typing import Callable, Iterable, List, Optional, Tuple, Union
+from typing import Callable, Dict, Iterable, List, Optional, Tuple, Union
 
 import gym
 import numpy as np
 from stable_baselines3.common import logger, utils
+from stable_baselines3.common.type_aliases import ReplayBufferSamples
 from stable_baselines3.common.callbacks import BaseCallback, CallbackList, ConvertCallback, EvalCallback
 from stable_baselines3.common.preprocessing import is_image_space
 from stable_baselines3.common.save_util import (
@@ -38,7 +39,8 @@ from seqopt.fsm.buffers import OptionsReplayBuffer
 from seqopt.fsm.callbacks import OptionsEvalCallback
 from seqopt.common.policies import ContinuousCritic, TerminatorPolicy
 from seqopt.common.state_counter import StateCounter
-from seqopt.common.types import RolloutReturn, ActorParams, CriticParams, TerminatorParams, ExplorationParams
+from seqopt.common.types import RolloutReturn, ActorParams, CriticParams, TerminatorParams, ExplorationParams, Schedule
+from seqopt.utils.demonstration_utils import load_demonstrations
 from seqopt.utils.state_utils import gym_subspace_box
 
 
@@ -83,6 +85,7 @@ class SequenceSAC(object):
         self.seed = seed
         self.device = get_device(device)
         self.replay_buffer = None
+        self.demo_replay_buffer = None
 
         # Initialize required variables
         self.default_actions = []
@@ -113,9 +116,12 @@ class SequenceSAC(object):
         self._last_dones = None
 
         # Additional variables
+        self._demo_learning_schedule = None
         self.eval_env = None
         self.num_timesteps = 0
         self._total_timesteps = 0
+        self.num_option_timesteps = []
+        self.num_option_delta_timesteps = []
         self._episode_num = 0
         self.start_time = None
         self.ep_info_buffer = None
@@ -304,6 +310,8 @@ class SequenceSAC(object):
                 self._active_option = (self._active_option + 1) % self.num_options
 
             self.num_timesteps += 1
+            self.num_option_timesteps[active_option] += 1
+            self.num_option_delta_timesteps[active_option] += 1
             option_timesteps[active_option] += 1
             episode_timesteps += 1
             total_steps += 1
@@ -331,14 +339,32 @@ class SequenceSAC(object):
                 episode_timesteps = 0
 
                 # Log training infos
-                # if log_interval is not None and self._episode_num % log_interval == 0:
-                #     self._dump_logs()
+                if log_interval is not None and self._episode_num % log_interval == 0:
+                    self._dump_logs()
+                    self.num_option_delta_timesteps = [0 for _ in range(self.num_options)]
 
         mean_reward = np.mean(episode_rewards) if total_episodes > 0 else 0.0
 
         callback.on_rollout_end()
 
         return RolloutReturn(option_timesteps, mean_reward, total_steps, total_episodes, continue_training)
+
+    def _dump_logs(self):
+        fps = int(self.num_timesteps / (time.time() - self.start_time))
+        logger.record("time/episodes", self._episode_num, exclude="tensorboard")
+        logger.record("time/fps", fps)
+        logger.record("time/time_elapsed", int(time.time() - self.start_time), exclude="tensorboard")
+        logger.record("time/total timesteps", self.num_timesteps, exclude="tensorboard")
+
+        # Log the number of steps taken for each option since the last log time and total over training time
+        for option_id in range(self.num_options):
+            logger.record(f"train/option_{option_id}/n_steps", self.num_option_timesteps[option_id])
+            logger.record(f"train/option_{option_id}/delta_n_steps", self.num_option_delta_timesteps[option_id])
+
+        # TODO(somesh): Log the mean/std/min/max of rewards seen across all episodes since the last log time
+
+        # Pass the number of timesteps for tensorboard
+        logger.dump(step=self.num_timesteps)
 
     @staticmethod
     def mask(input: th.Tensor, mask: Optional[np.ndarray]) -> th.Tensor:
@@ -422,115 +448,188 @@ class SequenceSAC(object):
         return terminate, termination_prob
 
     def train(self, option_id: int, gradient_steps: int, batch_size: int = 64) -> None:
-        next_option_id = (option_id + 1) % self.num_options
-        actor, next_actor = self.actors[option_id], self.actors[next_option_id]
-        critic, next_critic = self.critics[option_id], self.critics[next_option_id]
-        critic_target, next_critic_target = self.critic_targets[option_id], self.critic_targets[next_option_id]
-        terminator = self.terminators[option_id]
-        actor_ent_coef, next_actor_ent_coef = self.actor_ent_coefs[option_id], self.actor_ent_coefs[next_option_id]
-        terminator_ent_coef, next_terminator_ent_coef = self.terminator_ent_coefs[option_id],\
-                                                        self.terminator_ent_coefs[next_option_id]
+        critic = self.critics[option_id]
+        critic_target = self.critic_targets[option_id]
 
-        # Train policies and value functions
-        actor_losses, critic_losses, terminator_losses = [], [], []
+        loss_dicts = []
         for gradient_step in range(gradient_steps):
-            # Sample replay data
+            # Sample replay data (collected from RL)
             replay_data = self.replay_buffer.sample(option_id=option_id, batch_size=batch_size)
             if replay_data is None:
-                print(f"No replay data for option {option_id}")
+                print(f"No replay data for option {option_id}. This was unexpected, please check code!")
                 break
 
-            # Action by the current actor for the sampled state
-            actions_pi, log_prob = self.action_log_prob(option_id, replay_data.observations)
-            log_prob = log_prob.reshape(-1, 1)
-
-            # Break down the action/observation for the critics if action/observation masks need to be applied
-            critic_obs = self.mask(replay_data.observations, self.critic_obs_masks[option_id])
-            critic_next_obs = self.mask(replay_data.next_observations, self.critic_obs_masks[option_id])
-            next_critic_obs = self.mask(replay_data.observations, self.critic_obs_masks[next_option_id])
-            next_critic_next_obs = self.mask(replay_data.next_observations, self.critic_obs_masks[next_option_id])
-            if actor is None:
-                critic_acts = None
+            # Sample demo data if available
+            if self.demo_replay_buffer is not None:
+                demo_replay_data = self.demo_replay_buffer.sample(option_id=option_id, batch_size=batch_size)
             else:
-                critic_acts = self.mask(replay_data.actions, self.actor_act_masks[option_id])
+                demo_replay_data = None
 
-            # Compute Q-values/Targets based on interactions for next timestep
-            with th.no_grad():
-                # Select action according to current and next option policy
-                next_actions, next_log_prob = self.action_log_prob(option_id, replay_data.next_observations)
-                next_option_actions, next_option_log_prob = self.action_log_prob(next_option_id,
-                                                                                 replay_data.next_observations)
-
-                # Compute the next Q values for the given option: min over all critics targets
-                next_q_values = th.cat(critic_target(critic_next_obs, next_actions), dim=1)
-                next_q_values, _ = th.min(next_q_values, dim=1, keepdim=True)
-                # Compute the next Q values for the next option: min over all critics targets
-                next_option_q_values = th.cat(next_critic_target(next_critic_next_obs,
-                                                                 next_option_actions),
-                                              dim=1)
-                next_option_q_values, _ = th.min(next_option_q_values, dim=1, keepdim=True)
-
-                # Compute termination probability for the current option in the next states
-                _, termination_prob = self.sample_termination(option_id, replay_data.next_observations)
-
-                # add entropy term (this effective calculates the value function; not the "q-value")
-                next_q_values = next_q_values - actor_ent_coef * next_log_prob.reshape(-1, 1)
-                next_option_q_values = next_option_q_values - next_actor_ent_coef * next_option_log_prob.reshape(-1, 1)
-
-                # td error + entropy term
-                target_q_values = replay_data.rewards.unsqueeze(dim=-1) +\
-                                  (1 - replay_data.dones.unsqueeze(dim=-1)) * self.gamma *\
-                                  (1 - termination_prob) * next_q_values + termination_prob * next_option_q_values
-
-            # Get current Q-values estimates for each critic network
-            # using action from the replay buffer
-            current_q_values = critic(critic_obs, critic_acts)
-
-            # Compute critic loss
-            critic_loss = 0.5 * sum([F.mse_loss(current_q, target_q_values) for current_q in current_q_values])
-            critic_losses.append(critic_loss.item())
-
-            # Optimize the critic
-            critic.optimizer.zero_grad()
-            critic_loss.backward()
-            critic.optimizer.step()
-
-            # Compute actor loss
-            # Alternative: actor_loss = th.mean(log_prob - qf1_pi)
-            # Mean over all critic networks
-            q_values_pi = th.cat(critic.forward(critic_obs, actions_pi), dim=1)
-            min_qf_pi, _ = th.min(q_values_pi, dim=1, keepdim=True)
-            min_qf_pi_ = min_qf_pi.clone().detach()     # This value will be reused in the termination loss computation
-            actor_loss = (actor_ent_coef * log_prob - min_qf_pi).mean()
-            actor_losses.append(actor_loss.item())
-
-            # Optimize the actor
-            if actor is not None:
-                actor.optimizer.zero_grad()
-                actor_loss.backward()
-                actor.optimizer.step()
-
-            # Compute terminator loss
-            # We don't need to backpropagate through the value estimates since it doesn't explicitly depend on the
-            # termination policy
-            with th.no_grad():
-                next_option_actions_pi, _ = self.action_log_prob(next_option_id, replay_data.observations)
-                next_option_q_values_pi = th.cat(next_critic.forward(next_critic_obs, next_option_actions_pi), dim=1)
-                min_next_option_qf_pi, _ = th.min(next_option_q_values_pi, dim=1, keepdim=True)
-            _, termination_prob = self.sample_termination(option_id, replay_data.observations)
-            terminator_loss = ((1.0 - termination_prob) * (terminator_ent_coef * th.log(1.0 - termination_prob) - min_qf_pi_) +
-                               termination_prob * (next_terminator_ent_coef * th.log(termination_prob) -
-                                                  min_next_option_qf_pi)).mean()
-            terminator_losses.append(terminator_loss)
-
-            # Optimize the terminator
-            terminator.optimizer.zero_grad()
-            terminator_loss.backward()
-            terminator.optimizer.step()
+            loss_dict = self._optimize(option_id=option_id,
+                                       replay_data=replay_data,
+                                       demo_replay_data=demo_replay_data)
+            loss_dicts.append(loss_dict)
 
             # Update target networks
             if gradient_step % self.target_update_intervals[option_id] == 0:
                 polyak_update(critic.parameters(), critic_target.parameters(), self.taus[option_id])
+
+        # Log info
+        # NOTE: It should be safe to assume all loss dicts have the same keys
+        for loss_type in loss_dicts[0].keys():
+            mean_loss = np.mean([loss_dict[loss_type] for loss_dict in loss_dicts])
+            logger.record(f"train/option_{option_id}/{loss_type}", mean_loss)
+
+        if self.demo_replay_buffer is not None:
+            logger.record(f"train/lam", self._demo_learning_schedule(self._current_progress_remaining))
+
+    def _optimize(self,
+                  option_id: int,
+                  replay_data: ReplayBufferSamples,
+                  demo_replay_data: Optional[ReplayBufferSamples]) -> Dict:
+        next_option_id = (option_id + 1) % self.num_options
+        actor = self.actors[option_id]
+        terminator = self.terminators[option_id]
+        critic, next_critic = self.critics[option_id], self.critics[next_option_id]
+        critic_target, next_critic_target = self.critic_targets[option_id], self.critic_targets[next_option_id]
+        actor_ent_coef, next_actor_ent_coef = self.actor_ent_coefs[option_id], self.actor_ent_coefs[next_option_id]
+        terminator_ent_coef, next_terminator_ent_coef = self.terminator_ent_coefs[option_id],\
+                                                        self.terminator_ent_coefs[next_option_id]
+
+        # Create dictionary for storing loss data
+        loss_dict = dict()
+
+        if demo_replay_data is not None:
+            num_demo_samples = demo_replay_data.observations.shape[0]
+            # Merge both replay data so that we can pass them through the neural networks together
+            replay_data = OptionsReplayBuffer.merge_samples(replay_data, demo_replay_data)
+            lam = self._demo_learning_schedule(self._current_progress_remaining)
+        else:
+            num_demo_samples = 0
+            lam = 0.0
+
+        # Action by the current actor for the sampled state
+        actions_pi, log_prob = self.action_log_prob(option_id, replay_data.observations)
+        log_prob = log_prob.reshape(-1, 1)
+
+        # Break down the action/observation for the critics if action/observation masks need to be applied
+        critic_obs = self.mask(replay_data.observations, self.critic_obs_masks[option_id])
+        critic_next_obs = self.mask(replay_data.next_observations, self.critic_obs_masks[option_id])
+        next_critic_obs = self.mask(replay_data.observations, self.critic_obs_masks[next_option_id])
+        next_critic_next_obs = self.mask(replay_data.next_observations, self.critic_obs_masks[next_option_id])
+        if actor is None:
+            critic_acts = None
+        else:
+            critic_acts = self.mask(replay_data.actions, self.actor_act_masks[option_id])
+
+        # Compute Q-values/Targets based on interactions for next timestep
+        with th.no_grad():
+            # Select action according to current and next option policy
+            next_actions, next_log_prob = self.action_log_prob(option_id, replay_data.next_observations)
+            next_option_actions, next_option_log_prob = self.action_log_prob(next_option_id,
+                                                                             replay_data.next_observations)
+
+            # Compute the next Q values for the given option: min over all critics targets
+            next_q_values = th.cat(critic_target(critic_next_obs, next_actions), dim=1)
+            next_q_values, _ = th.min(next_q_values, dim=1, keepdim=True)
+            # Compute the next Q values for the next option: min over all critics targets
+            next_option_q_values = th.cat(next_critic_target(next_critic_next_obs,
+                                                             next_option_actions),
+                                          dim=1)
+            next_option_q_values, _ = th.min(next_option_q_values, dim=1, keepdim=True)
+
+            # Compute termination probability for the current option in the next states
+            _, termination_prob = self.sample_termination(option_id, replay_data.next_observations)
+
+            # add entropy term (this effective calculates the value function; not the "q-value")
+            next_q_values = next_q_values - actor_ent_coef * next_log_prob.reshape(-1, 1)
+            next_option_q_values = next_option_q_values - next_actor_ent_coef * next_option_log_prob.reshape(-1, 1)
+
+            # td error + entropy term
+            target_q_values = replay_data.rewards.unsqueeze(dim=-1) +\
+                              (1 - replay_data.dones.unsqueeze(dim=-1)) * self.gamma *\
+                              (1 - termination_prob) * next_q_values + termination_prob * next_option_q_values
+
+        # Get current Q-values estimates for each critic network
+        # using action from the replay buffer
+        current_q_values = critic(critic_obs, critic_acts)
+
+        # Compute critic loss
+        if num_demo_samples == 0:
+            critic_loss = 0.5 * sum([F.mse_loss(current_q, target_q_values) for current_q in current_q_values])
+            loss_dict['critic_loss'] = critic_loss.item()
+        else:
+            rl_critic_loss = 0.5 * sum([F.mse_loss(current_q[:-num_demo_samples], target_q_values[:-num_demo_samples])
+                                        for current_q in current_q_values])
+            demo_critic_loss = 0.5 * sum([F.mse_loss(current_q[num_demo_samples:], target_q_values[num_demo_samples:])
+                                        for current_q in current_q_values])
+            critic_loss = rl_critic_loss + lam * demo_critic_loss
+            loss_dict['rl_critic_loss'] = rl_critic_loss.item()
+            loss_dict['demo_critic_loss'] = demo_critic_loss.item()
+            loss_dict['critic_loss'] = critic_loss.item()
+
+        # Optimize the critic
+        critic.optimizer.zero_grad()
+        critic_loss.backward()
+        th.nn.utils.clip_grad_norm_(critic.parameters(), 0.5)
+        critic.optimizer.step()
+
+        # Compute actor loss
+        # Alternative: actor_loss = th.mean(log_prob - qf1_pi)
+        # Mean over all critic networks
+        q_values_pi = th.cat(critic.forward(critic_obs, actions_pi), dim=1)
+        min_qf_pi, _ = th.min(q_values_pi, dim=1, keepdim=True)
+        min_qf_pi_ = min_qf_pi.clone().detach()     # This value will be reused in the termination loss computation
+        if actor is not None:
+            sample_actor_losses = actor_ent_coef * log_prob - min_qf_pi
+            if num_demo_samples == 0:
+                actor_loss = sample_actor_losses.mean()
+                loss_dict['actor_loss'] = actor_loss.item()
+            else:
+                rl_actor_loss = sample_actor_losses[:-num_demo_samples].mean()
+                demo_actor_loss = sample_actor_losses[num_demo_samples:].mean()
+                actor_loss = rl_actor_loss + lam * demo_actor_loss
+                loss_dict['rl_actor_loss'] = rl_actor_loss.item()
+                loss_dict['demo_actor_loss'] = demo_actor_loss.item()
+                loss_dict['actor_loss'] = actor_loss.item()
+
+            # Optimize the actor
+            actor.optimizer.zero_grad()
+            actor_loss.backward()
+            th.nn.utils.clip_grad_norm_(actor.parameters(), 0.5)
+            actor.optimizer.step()
+        else:
+            actor_loss = None
+
+        # Compute terminator loss
+        # We don't need to backpropagate through the value estimates since it doesn't explicitly depend on the
+        # termination policy
+        with th.no_grad():
+            next_option_actions_pi, _ = self.action_log_prob(next_option_id, replay_data.observations)
+            next_option_q_values_pi = th.cat(next_critic.forward(next_critic_obs, next_option_actions_pi), dim=1)
+            min_next_option_qf_pi, _ = th.min(next_option_q_values_pi, dim=1, keepdim=True)
+        _, termination_prob = self.sample_termination(option_id, replay_data.observations)
+        sample_terminator_losses =\
+            ((1.0 - termination_prob) * (terminator_ent_coef * th.log(1.0 - termination_prob) - min_qf_pi_) +
+             termination_prob * (next_terminator_ent_coef * th.log(termination_prob) - min_next_option_qf_pi))
+        if num_demo_samples == 0:
+            terminator_loss = sample_terminator_losses.mean()
+            loss_dict['terminator_loss'] = terminator_loss.item()
+        else:
+            rl_terminator_loss = sample_terminator_losses[:-num_demo_samples].mean()
+            demo_terminator_loss = sample_terminator_losses[num_demo_samples:].mean()
+            terminator_loss = rl_terminator_loss + lam * demo_terminator_loss
+            loss_dict['rl_terminator_loss'] = rl_terminator_loss.item()
+            loss_dict['demo_terminator_loss'] = demo_terminator_loss.item()
+            loss_dict['terminator_loss'] = terminator_loss.item()
+
+        # Optimizer terminator
+        terminator.optimizer.zero_grad()
+        terminator_loss.backward()
+        th.nn.utils.clip_grad_norm_(terminator.parameters(), 0.5)
+        terminator.optimizer.step()
+
+        return loss_dict
 
     def learn(self,
               total_timesteps: int,
@@ -544,17 +643,11 @@ class SequenceSAC(object):
               eval_log_path: Optional[str] = None,
               reset_num_timesteps: bool = True,
               demo_path: Optional[str] = None,
-              pretrain_terminations: bool = False,
-              pretrain_policies: bool = False,
-              pretrain_values: bool = False,
-              pretrain_epochs: int = 10000
+              demo_learning_schedule: Schedule = 0.0
               ) -> "SequenceSAC":
-        assert demo_path is not None or not (pretrain_terminations or pretrain_policies or pretrain_values),\
-            'Pretraining of terminations, policies and/or values requires path to folder containing demonstrations'
-
         total_timesteps, callback = self._setup_learn(
             total_timesteps, eval_env, reward_func, callback, eval_freq, n_eval_episodes,
-            eval_log_path, reset_num_timesteps, tb_log_name
+            eval_log_path, reset_num_timesteps, tb_log_name, demo_path, demo_learning_schedule
         )
 
         callback.on_training_start(locals(), globals())
@@ -574,7 +667,8 @@ class SequenceSAC(object):
                 for option_id in range(self.num_options):
                     # Do as many gradient steps as the steps taken under the particular option in the rollout(s)
                     gradient_steps = rollout.option_timesteps[option_id]
-                    self.train(option_id=option_id, batch_size=self.batch_size, gradient_steps=gradient_steps)
+                    if gradient_steps > 0:
+                        self.train(option_id=option_id, batch_size=self.batch_size, gradient_steps=gradient_steps)
 
         callback.on_training_end()
 
@@ -606,6 +700,8 @@ class SequenceSAC(object):
         log_path: Optional[str] = None,
         reset_num_timesteps: bool = True,
         tb_log_name: str = "run",
+        demo_path: Optional[str] = None,
+        demo_learning_schedule: Schedule = 0.0
     ) -> Tuple[int, BaseCallback]:
         """
         Based on:
@@ -624,6 +720,8 @@ class SequenceSAC(object):
         """
         self._active_option = 0
         self.num_options = len(self.actors)
+        self.num_option_timesteps = [0 for _ in range(self.num_options)]
+        self.num_option_delta_timesteps = [0 for _ in range(self.num_options)]
 
         # Initialize the rollout buffer
         self.replay_buffer = OptionsReplayBuffer(
@@ -633,6 +731,29 @@ class SequenceSAC(object):
             n_options=self.num_options,
             device=self.device,
         )
+
+        # Also initialize the 'Expert' replay buffer from demonstrations if we have any
+        if demo_path is not None:
+            self._demo_learning_schedule = demo_learning_schedule
+            (options, obs, next_obs, acts, rews), _ = load_demonstrations(demo_path, reward_func)
+            num_samples = obs.shape[0]
+            self.demo_replay_buffer = OptionsReplayBuffer(
+                buffer_size=num_samples,
+                observation_space=self.env.observation_space,
+                action_space=self.env.action_space,
+                n_options=self.num_options,
+                device=self.device
+            )
+
+            # Add the samples to the replay buffer one-by-one (there are more efficient ways to do this
+            # but since we only need to do this once, we can live with it for now)
+            for idx in range(num_samples):
+                self.demo_replay_buffer.add(options[idx],
+                                            obs[idx],
+                                            next_obs[idx],
+                                            acts[idx],
+                                            rews[idx],
+                                            np.array([0]))
 
         self.start_time = time.time()
         if self.ep_info_buffer is None or reset_num_timesteps:

@@ -195,6 +195,11 @@ def scaled_dist(dist: np.ndarray):
     return 1.0 - np.tanh(np.arctanh(np.sqrt(0.95)) / 0.8 * dist)
 
 
+# def is_grasped(observation: th.Tensor):
+#     grasped = (grasp_to_obj_pose(observation) <= _REACH_CLOSE and fingertip_dist(observation) <= _GRASP_CLOSE)
+#     return grasped
+
+
 def reward(last_obs: np.ndarray,
            obs: np.ndarray,
            action: np.ndarray,
@@ -216,42 +221,12 @@ def reward(last_obs: np.ndarray,
     grasp_success, last_grasp_success = np.logical_and(reach_success, gripper_close_dist <= _GRASP_CLOSE),\
                                         np.logical_and(last_reach_success, last_gripper_close_dist <= _GRASP_CLOSE)
 
-    # print(f"Reach Success: {reach_success}, Grasp Success: {grasp_success}, Grasp to obj dist: {grasp_to_obj_distance}")
-    # print(f"Grasp to obj dist: {grasp_to_obj_distance}, Gripper Close Dist: {gripper_close_dist}")
-
     # Assign rewards based on the option engaged
-    # Consider the following 'progress-based' rewards
-    # reach_reward = _REACH_REWARD_COEF * (last_grasp_to_obj_distance - grasp_to_obj_distance)
     reach_reward = _REACH_REWARD_COEF * (scaled_dist(grasp_to_obj_distance) - scaled_dist(last_grasp_to_obj_distance))
-
-
-    # Dense grasp reward
-    # grasp_reward = 50.0 * reach_success.astype(int) * (last_gripper_close_dist - gripper_close_dist)
     grasp_reward = _GRASP_REWARD_COEF * (grasp_success.astype(np.int) - last_grasp_success.astype(np.int))
-    # delta_obs_to_target_distance = last_obj_to_target_distance - obj_to_target_distance
-    # encouragement_rew = np.where(delta_obs_to_target_distance > 1e-3, 1e-1, 0.)
     place_reward = _PLACE_REWARD_COEF * grasp_success.astype(np.int) * (scaled_dist(obj_to_target_distance) -
                                                                         scaled_dist(last_obj_to_target_distance))
-    # place_reward = _PLACE_REWARD_COEF * grasp_success.astype(np.int) * (last_obj_to_target_distance - obj_to_target_distance)
-    # place_reward = _PLACE_REWARD_COEF * (grasp_success.astype(np.int) * scaled_dist(obj_to_target_distance) -
-    #                                      last_grasp_success.astype(np.int) * scaled_dist(last_obj_to_target_distance)) \
-    #                 + grasp_success.astype(np.int) * encouragement_rew
-                   # (_PLACE_REWARD_COEF * (scaled_dist(obj_to_target_distance) - scaled_dist(last_obj_to_target_distance)))
 
-    # Print if grasp is successful
-    # if last_grasp_success:
-    #     print(f"{Fore.GREEN}Last Grasp: Successful!{Style.RESET_ALL}")
-    # else:
-    #     print(f"{Fore.RED}Last Grasp: Unsuccessful!{Style.RESET_ALL}")
-    # if grasp_success:
-    #     print(f"{Fore.GREEN}Grasp: Successful!{Style.RESET_ALL}, Rew: {grasp_reward}")
-    # else:
-    #     print(f"{Fore.RED}Grasp: Unsuccessful!{Style.RESET_ALL}")
-
-    # Options will be penalized for inducing negative progress in other options
-    # However, they are not rewarded for making positive progress by doing the work of other options
-    # print(f"Delta dist (reach): {last_grasp_to_obj_distance - grasp_to_obj_distance}")
-    # print(f"Delta dist (place): {delta_obs_to_target_distance}")
     rew = \
         np.where(option_id == 0,
                  reach_reward + np.clip(grasp_reward, None, 0.) + np.clip(place_reward, None, 0.),
@@ -262,15 +237,5 @@ def reward(last_obs: np.ndarray,
         np.where(option_id == 2,
                  place_reward + np.clip(grasp_reward, None, 0.) + np.clip(reach_reward, None, 0.),
                  0.)
-    # gripper_vel = get_state_item(obs[0], 'gripper_joints_vel')
-    # print(f"Gripper to obj dist: {grasp_to_obj_distance}")
-
-    # Task success reward
-    # last_success = (last_grasp_success and last_obj_to_target_distance <= _PLACE_CLOSE)
-    # success = (grasp_success and obj_to_target_distance <= _PLACE_CLOSE)
-    # rew += 100 * (success.astype(np.int) - last_success.astype(np.int))
-
-    # Terminal Reward
-    # rew = np.where(obj_to_target_distance <= _PLACE_CLOSE, 100.0, rew)
 
     return rew

@@ -8,6 +8,7 @@ import dmc2gym
 import numpy as np
 from stable_baselines3.common.callbacks import CheckpointCallback
 from stable_baselines3.common.env_util import make_vec_env
+from stable_baselines3.common.utils import get_schedule_fn
 from stable_baselines3.common.vec_env import VecEnv
 import torch as th
 
@@ -36,11 +37,8 @@ if __name__ == '__main__':
     parser.add_argument('--tensorboard-log-path', type=str, default='', help='Path for tensorboard logs')
     parser.add_argument('--count-based-exploration', action='store_true',
                         help='Add intrinsic rewards for count-based exploration')
-    parser.add_argument('--pretrain-demos-path', type=str, default='',
+    parser.add_argument('--demos-path', type=str, default='',
                         help='Path to folder with demonstrations for pretraining. Set only when pretraining!')
-    parser.add_argument('--pretrain-policies', action='store_true', help='Pretrain policies')
-    parser.add_argument('--pretrain-values', action='store_true', help='Pretrain values')
-    parser.add_argument('--pretrain-terminations', action='store_true', help='Pretrain terminations')
     parser.add_argument('--seed', type=int, default=0, help='Seed for random number generators')
     parser.add_argument('--verbose', action='store_true', help='Verbose output')
     args = parser.parse_args()
@@ -101,14 +99,11 @@ if __name__ == '__main__':
             n_eval_episodes=args.n_eval_episodes,
             eval_log_path=eval_log_path,
             reset_num_timesteps=False,
-            demo_path=None if args.pretrain_demos_path == '' else args.pretrain_demos_path,
-            pretrain_terminations=args.pretrain_terminations,
-            pretrain_policies=args.pretrain_policies,
-            pretrain_values=args.pretrain_values
+            demo_path=None
         )
     else:
 
-        # Initialize the SequencePPO algorithm
+        # Initialize the SequenceSAC algorithm
         if tensorboard_log_path is None:
             print("No tensorboard log path specified through --tensorboard-log-path. Disabling tensorboard logging!")
 
@@ -247,7 +242,9 @@ if __name__ == '__main__':
         place_actor_params.net_arch = [200, 100]
         place_actor_params.observation_mask = np.concatenate([
             np.arange(8),       # sin/cos representation of joint angles for the 4 arm joints
+            np.arange(8, 16),   # sin/cos representation of joint angles for the 4 gripper joints
             np.arange(16, 20),  # joint velocities of arm joints
+            np.arange(33, 35),  # Position of object
             np.arange(40, 42)   # Position of target location
         ])
         place_actor_params.action_mask = np.arange(4)
@@ -284,17 +281,20 @@ if __name__ == '__main__':
             print("No eval_log_path specified...Disabling checkpoint saving of model!")
             checkpoint_callback = None
 
+        # Define schedule for demo learning
+        def demo_schedule(progress_remaining):
+            return max(2 * progress_remaining - 1, 0)
+
         # Train
         algorithm.learn(
             total_timesteps=args.total_steps,
             reward_func=manipulator_utils.reward,
             callback=checkpoint_callback,
+            log_interval=3,
             eval_env=eval_vec_env,
             eval_freq=args.eval_freq,
             n_eval_episodes=args.n_eval_episodes,
             eval_log_path=eval_log_path,
-            demo_path=None if args.pretrain_demos_path == '' else args.pretrain_demos_path,
-            pretrain_terminations=args.pretrain_terminations,
-            pretrain_policies=args.pretrain_policies,
-            pretrain_values=args.pretrain_values
+            demo_path=None if args.demos_path == '' else args.demos_path,
+            demo_learning_schedule=get_schedule_fn(demo_schedule)
         )
