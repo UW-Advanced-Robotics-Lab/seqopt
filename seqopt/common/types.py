@@ -19,7 +19,7 @@ class RolloutReturn(NamedTuple):
 
 @dataclass
 class ActorParams:
-    default_action: np.ndarray
+    default_action: Union[Callable[[th.Tensor], th.Tensor], th.Tensor]
     observation_mask: Optional[Union[Iterable[Union[int, bool]], slice]] = None
     action_mask: Optional[np.ndarray] = None
     lr_schedule: Union[float, Schedule] = 3e-4
@@ -48,12 +48,11 @@ class CriticParams:
 @dataclass
 class TerminatorParams:
     observation_mask: Optional[Union[Iterable[Union[int, bool]], slice]] = None
-    lr_schedule: Union[float, Schedule] = 3e-6
+    lr_schedule: Union[float, Schedule] = 5e-7
     net_arch: Optional[List[int]] = None
     use_boltzmann: bool = True     # Use Boltzmann (Softmax) distribution to compute probabilities for termination
     ent_coef: float = 0.0
     activation_fn: Type[th.nn.Module] = th.nn.ReLU
-    target_kl: Optional[float] = 5e-4
     max_grad_norm: float = 0.5
     optimizer_class: Type[th.optim.Optimizer] = th.optim.Adam
     optimizer_kwargs: Dict[str, Any] = field(default_factory=lambda: dict())

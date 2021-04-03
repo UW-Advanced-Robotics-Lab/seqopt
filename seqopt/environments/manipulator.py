@@ -208,6 +208,11 @@ class Physics(mujoco.Physics):
     site1_to_site2 = np.diff(self.named.data.site_xpos[[site2, site1]], axis=0)
     return np.linalg.norm(site1_to_site2)
 
+  def grasp_angle(self):
+    qw, qy = self.named.data.xquat['hand', ['qw', 'qy']]
+    yaw = np.arctan2(2 * qw * qy, 1 - 2 * (qy ** 2))
+    return yaw
+
 
 class Bring(base.Task):
   """A Bring `Task`: bring the prop to the target."""
@@ -335,6 +340,17 @@ class Bring(base.Task):
       obs['object_pos'] = physics.body_2d_pose(self._object)
       obs['object_vel'] = physics.joint_vel(self._object_joints)
       obs['target_pos'] = physics.body_2d_pose(self._target)
+
+    # CUSTOM OBSERVATIONS (not used by any neural networks, but used in learning)
+    # This will be used in computation of custom rewards and other logic in code
+    obs['reach_dist'] = physics.site_distance(self._object, 'grasp')
+    fingertip_dist = physics.site_distance('fingertip_touch', 'thumbtip_touch')
+    obs['grasped'] = np.dtype('float64').type(1.0)\
+      if obs['reach_dist'] <= _REACH_CLOSE and fingertip_dist <= _GRASP_CLOSE else np.dtype('float64').type(0.0)
+    obs['place_dist'] = physics.site_distance(self._object, self._target)
+    obs['fingertip_dist'] = fingertip_dist
+    obs['grasp_angle'] = physics.grasp_angle()
+
     return obs
 
   def _is_close(self, distance):

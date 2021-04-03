@@ -134,10 +134,10 @@ if __name__ == '__main__':
 
         if args.count_based_exploration:
             def features_extractor(states: th.Tensor):
-                # Get the distance and relative angles between the grasper and object
-                features = th.stack([th.cat([manipulator_utils.grasp_to_obj_pose(state),
-                                             th.unsqueeze(manipulator_utils.fingertip_dist(state), -1)])
-                                     for state in states])
+                # Get the distance, relative angles between the grasper and object and the gripper closure
+                features = states[..., np.concatenate([manipulator_utils.INDEX_DICT['reach_dist'],
+                                                       manipulator_utils.INDEX_DICT['grasp_angle'],
+                                                       manipulator_utils.INDEX_DICT['fingertip_dist']])]
                 return features
             # For distance-based boundary, we will create evenly-spaced values on the log distance scale between
             # 0.01 - 0.1 m (values outside these ranges are pretty meaningless w.r.t the task, so we can bin them together)
@@ -155,7 +155,7 @@ if __name__ == '__main__':
 
         # Option 0: REACHING
         # ------------------
-        reach_actor_params = ActorParams(default_action=np.array([0., 0., 0., 0., -1.], dtype=np.float32))
+        reach_actor_params = ActorParams(default_action=th.Tensor([0., 0., 0., 0., -1.]))
         reach_critic_params = CriticParams()
         reach_terminator_params = TerminatorParams()
         reach_exploration_params = None
@@ -196,7 +196,7 @@ if __name__ == '__main__':
 
         # Option 1: GRASPING
         # ------------------
-        grasp_actor_params = ActorParams(default_action=np.array([0., 0., 0., 0., 1.], dtype=np.float32))
+        grasp_actor_params = ActorParams(default_action=th.Tensor([0., 0., 0., 0., 1.]))
         grasp_critic_params = CriticParams()
         grasp_terminator_params = TerminatorParams()
         if args.count_based_exploration:
@@ -233,7 +233,13 @@ if __name__ == '__main__':
 
         # Option 2: PLACING
         # -----------------
-        place_actor_params = ActorParams(default_action=np.array([0., 0., 0., 0., 0.5], dtype=np.float32))
+        # For placing, we want the default action to be dependent on whether the object is grasped or not
+        def place_default_action(observations: th.Tensor):
+            return th.where(observations[..., manipulator_utils.INDEX_DICT['grasped']].unsqueeze(dim=-1) == 1.0,
+                            th.Tensor([0., 0., 0., 0., 0.5]),
+                            th.Tensor([0., 0., 0., 0., 0.])).squeeze()
+
+        place_actor_params = ActorParams(default_action=place_default_action)
         place_critic_params = CriticParams()
         place_terminator_params = TerminatorParams()
         place_exploration_params = None

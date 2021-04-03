@@ -147,7 +147,7 @@ class SequenceSAC(object):
         if actor_params.action_mask is not None and actor_params.action_mask.size == 0:
             empty_action_space = True
 
-        self.default_actions.append(th.as_tensor(actor_params.default_action, device=self.device))
+        self.default_actions.append(actor_params.default_action)
 
         # Initialize actor
         if not empty_action_space:
@@ -280,9 +280,9 @@ class SequenceSAC(object):
             # Calculate the reward using our custom reward function
             # Since our reward function works with batched interactions, expand the dimensions of each element
             reward = reward_func(np.expand_dims(self._last_obs, 0),
-                                  np.expand_dims(curr_obs, 0),
-                                  np.expand_dims(action, 0),
-                                  np.array([[active_option]])).squeeze()
+                                 np.expand_dims(curr_obs, 0),
+                                 np.expand_dims(action, 0),
+                                 np.array([[active_option]])).squeeze()
 
             # Assign intrinsic, exploration reward if required
             curr_obs_tensor = th.unsqueeze(th.as_tensor(curr_obs, device=self.device), dim=0)
@@ -382,12 +382,21 @@ class SequenceSAC(object):
             output[..., mask] = input.clone()
             return output
 
+    def _get_default_actions(self, option_id: int, observations: th.Tensor):
+        default_action = self.default_actions[option_id]
+        if callable(default_action):
+            observations_ = observations.squeeze()
+            default_actions = default_action(observations_)
+            return default_actions.to(self.device)
+        else:
+            return default_action.to(self.device)
+
     def action_log_prob(self,
                         option_id: int,
                         observation: th.Tensor,
                         masked_actions: bool = True) -> Tuple[Optional[th.Tensor], th.Tensor]:
         actor = self.actors[option_id]
-        default_action = self.default_actions[option_id]
+        default_action = self._get_default_actions(option_id, observation)
         # If we have no control over any output values with this option, return the default action for this option
         if actor is None:
             if masked_actions:
@@ -411,7 +420,7 @@ class SequenceSAC(object):
                       deterministic: bool = False,
                       random: bool = False) -> th.Tensor:
         actor = self.actors[option_id]
-        default_action = self.default_actions[option_id]
+        default_action = self._get_default_actions(option_id, observation)
         # If we have no control over any output values with this option, return the default action for this option
         if actor is None:
             return default_action.clone()
@@ -508,7 +517,7 @@ class SequenceSAC(object):
             num_demo_samples = 0
             lam = 0.0
 
-        # Action by the current actor for the sampled state
+        # Actions by the current actor for the sampled states
         actions_pi, log_prob = self.action_log_prob(option_id, replay_data.observations)
         log_prob = log_prob.reshape(-1, 1)
 
@@ -626,7 +635,7 @@ class SequenceSAC(object):
         # Optimizer terminator
         terminator.optimizer.zero_grad()
         terminator_loss.backward()
-        th.nn.utils.clip_grad_norm_(terminator.parameters(), 0.5)
+        th.nn.utils.clip_grad_norm_(terminator.parameters(), 0.1)
         terminator.optimizer.step()
 
         return loss_dict
