@@ -37,13 +37,13 @@ def load_demonstrations(demo_path: str,
         demo_observations = np.column_stack([np.reshape(demo[obs_name], (demo[obs_name].shape[0], -1))
                                              for obs_name in env.observation_spec().keys()])
         demo_subtasks = demo['subtask_id']
-        demo_actions = demo['joint_torques']
+        demo_actions = demo['actions']
 
         # Calculate the rewards obtained at each timestep, and compute the value of each state based on the rewards
         demo_rewards = reward_func(last_obs=demo_observations[:-1],
                                    obs=demo_observations[1:],
                                    action=demo_actions,
-                                   option_id=demo_subtasks[:-1])
+                                   option_id=demo_subtasks[:-1]).squeeze()
 
         # Ignore last state and its corresponding subtask for each demo (since there is no action corresponding
         # to the last observation)

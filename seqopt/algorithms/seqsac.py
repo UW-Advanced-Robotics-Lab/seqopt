@@ -607,8 +607,6 @@ class SequenceSAC(object):
             actor_loss.backward()
             th.nn.utils.clip_grad_norm_(actor.parameters(), 0.5)
             actor.optimizer.step()
-        else:
-            actor_loss = None
 
         # Compute terminator loss
         # We don't need to backpropagate through the value estimates since it doesn't explicitly depend on the

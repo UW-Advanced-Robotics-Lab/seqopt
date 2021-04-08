@@ -4,11 +4,10 @@ from dm_control import viewer
 import dmc2gym
 import numpy as np
 from stable_baselines3.common.env_util import make_vec_env
+import torch as th
 
-from btopt import environments
-from btopt.algorithms import SequencePPO
-from btopt.fsm.evaluation import evaluate_policy
-import btopt.utils.manipulator_utils as manipulator_utils
+from seqopt import environments
+from seqopt.algorithms import SequenceSAC
 
 
 if __name__ == '__main__':
@@ -53,7 +52,7 @@ if __name__ == '__main__':
                                 seed=args.seed)
 
     # Initialize the BTPPO algorithm
-    model = SequencePPO.load(path=args.model,
+    model = SequenceSAC.load(path=args.model,
                              env=vec_env,
                              device='cuda' if args.gpu else 'cpu')
 
@@ -61,17 +60,28 @@ if __name__ == '__main__':
     active_option = 0
     def play_policy(time_step):
         global args, active_option
-        # print(time_step)
+
         # Extract and flatten current observation
         obs = np.concatenate([ob.flatten() for ob in time_step.observation.values()])
         obs = np.expand_dims(obs, axis=0)
+        obs_tensor = th.as_tensor(obs, device=model.device, dtype=th.float32)
 
-        # Pass the observation to the model and get the action
-        active_option, _, action, _ =\
-            model.fsm.predict(obs=obs,
-                              active_option=active_option,
-                              deterministic_action=not args.stochastic_actions,
-                              deterministic_termination=not args.stochastic_terminations)
+        # Check if we should move to the next option based on the current state (does not apply for the first step
+        # in the episode)
+        if not time_step.first():
+            with th.no_grad():
+                terminate, _ = model.sample_termination(active_option,
+                                                        obs_tensor,
+                                                        deterministic=not args.stochastic_terminations)
+                if terminate:
+                    active_option = (active_option + 1) % model.num_options
+
+        # Get action from policy
+        with th.no_grad():
+            action = model.sample_action(active_option,
+                                         obs_tensor,
+                                         deterministic=not args.stochastic_actions)
+
         action = np.squeeze(action.cpu().numpy())
         clipped_actions = np.clip(action, vec_env.action_space.low, vec_env.action_space.high)
         return clipped_actions

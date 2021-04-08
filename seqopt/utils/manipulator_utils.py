@@ -66,6 +66,9 @@ def reward(last_obs: np.ndarray,
     grasp_reward = _GRASP_REWARD_COEF * (grasp_success - last_grasp_success)
     place_reward = _PLACE_REWARD_COEF * grasp_success * (scaled_dist(place_dist) - scaled_dist(last_place_dist))
 
+    if len(option_id.shape) < 2:
+        option_id = np.expand_dims(option_id, axis=-1)
+
     rew = \
         np.where(option_id == 0,
                  reach_reward + np.clip(grasp_reward, None, 0.) + np.clip(place_reward, None, 0.),

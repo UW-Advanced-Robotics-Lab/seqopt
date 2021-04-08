@@ -76,7 +76,7 @@ def evaluate_policy(
                                  np.vstack([infos[idx]['terminal_observation']
                                             if done else new_obs[idx] for idx, done in enumerate(dones)]),
                                  clipped_actions,
-                                 active_option)
+                                 np.array([[active_option]])).squeeze()
             obs = new_obs
             episode_reward += reward
 
