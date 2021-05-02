@@ -41,7 +41,7 @@ from seqopt.common.policies import ContinuousCritic, TerminatorPolicy
 from seqopt.common.state_counter import StateCounter
 from seqopt.common.types import RolloutReturn, ActorParams, CriticParams, TerminatorParams, ExplorationParams, Schedule
 from seqopt.utils.demonstration_utils import load_demonstrations
-from seqopt.utils.state_utils import gym_subspace_box
+from seqopt.utils.state_utils import gym_subspace_box, obs_to_box_space
 
 
 class SequenceSAC(object):
@@ -68,8 +68,9 @@ class SequenceSAC(object):
         assert env.num_envs == 1,\
             'We do not current support Vectorized Environments with more than 1 environment!'
         # Currently, we only support box spaces for gym environments
-        assert isinstance(self.env.observation_space, gym.spaces.Box),\
-            'Only observation spaces of type gym.spaces.Box are allowed!'
+        assert isinstance(self.env.observation_space, gym.spaces.Box) or \
+               isinstance(self.env.observation_space, gym.spaces.Dict),\
+            'Only observation spaces of type gym.spaces.Box or gym.spaces.Dict are allowed!'
         assert isinstance(self.env.action_space, gym.spaces.Box),\
             'Only action spaces of type gym.spaces.Box are allowed!'
 
@@ -268,6 +269,7 @@ class SequenceSAC(object):
 
             # Perform action
             new_obs, _, done, info = env.step(action)
+            new_obs = obs_to_box_space(self.env.observation_space, new_obs)
 
             # Remove the batch dimension from outputs of the Vectorized Environment, since we only have 1 env
             new_obs, done, info = new_obs.squeeze(), done.squeeze(), info[0]
@@ -275,7 +277,11 @@ class SequenceSAC(object):
             # Note: The new observation doesn't make sense in the context of the last observation when
             #       the episode ends. If the done flag is set, we set the new observation to the terminal observation
             #       that is stored in the infos
-            curr_obs = new_obs if not done else info['terminal_observation'].astype(np.float32)
+            curr_obs = new_obs if not done else obs_to_box_space(self.env.observation_space,
+                                                                 info['terminal_observation'],
+                                                                 use_batch_dim=False,
+                                                                 ordered_keys=list(self.env.observation_space.spaces.keys())
+                                                                 if isinstance(self.env.observation_space, gym.spaces.Dict) else None).astype(np.float32)
 
             # Calculate the reward using our custom reward function
             # Since our reward function works with batched interactions, expand the dimensions of each element
@@ -777,7 +783,7 @@ class SequenceSAC(object):
         self._total_timesteps = total_timesteps
 
         # Avoid resetting the environment when calling ``.learn()`` consecutive times
-        self._last_obs = self.env.reset()
+        self._last_obs = obs_to_box_space(self.env.observation_space, self.env.reset())
         if reset_num_timesteps or self._last_obs is None:
             self._last_dones = np.zeros((self.env.num_envs,), dtype=np.bool)
 
@@ -1003,9 +1009,9 @@ class SequenceSAC(object):
         if eval_env is None:
             eval_env = self.eval_env
 
-        if eval_env is not None:
-            eval_env = self._wrap_env(eval_env, self.verbose)
-            assert eval_env.num_envs == 1
+        # if eval_env is not None:
+        #     eval_env = self._wrap_env(eval_env, self.verbose)
+        #     assert eval_env.num_envs == 1
         return eval_env
 
     @staticmethod

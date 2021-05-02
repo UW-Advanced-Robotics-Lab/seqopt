@@ -7,6 +7,8 @@ import torch as th
 
 from stable_baselines3.common.vec_env import VecEnv
 
+from seqopt.utils.state_utils import obs_to_box_space
+
 
 def evaluate_policy(
     model: "seqopt.algorithms.SequenceSAC",
@@ -56,7 +58,7 @@ def evaluate_policy(
     for i in range(n_eval_episodes):
         # Avoid double reset, as VecEnv are reset automatically
         if not isinstance(env, VecEnv) or i == 0:
-            obs = env.reset()
+            obs = obs_to_box_space(env.observation_space, env.reset())
         dones, state = False, None
         episode_reward = 0.0
         episode_length = 0
@@ -66,15 +68,22 @@ def evaluate_policy(
                 action = model.sample_action(active_option,
                                              obs_tensor,
                                              deterministic=deterministic_actions)
-
             clipped_actions = np.clip(action.cpu().numpy(), env.action_space.low, env.action_space.high)
             if len(clipped_actions.shape) == 1:
                 clipped_actions = np.expand_dims(clipped_actions, 0)
 
             new_obs, _, dones, infos = env.step(clipped_actions)
+            new_obs = obs_to_box_space(env.observation_space, new_obs)
+            curr_obs = np.vstack([new_obs[idx] if not done \
+                else obs_to_box_space(env.observation_space,
+                 infos[idx]['terminal_observation'],
+                 use_batch_dim=False,
+                 ordered_keys=list(env.observation_space.spaces.keys())
+                 if isinstance(env.observation_space, gym.spaces.Dict) else None).astype(np.float32) \
+            for idx, done in enumerate(dones)])
+
             reward = reward_func(obs,
-                                 np.vstack([infos[idx]['terminal_observation']
-                                            if done else new_obs[idx] for idx, done in enumerate(dones)]),
+                                 curr_obs,
                                  clipped_actions,
                                  np.array([[active_option]])).squeeze()
             obs = new_obs
