@@ -17,9 +17,12 @@ _PLACE_CLOSE = 0.015
 
 # Reward multipliers (note rewards for different subtasks are of different scales, so this is an effort to normalize
 # them)
+# _REACH_REWARD_COEF = 25.0
+# _GRASP_REWARD_COEF = 30.0
+# _PLACE_REWARD_COEF = 250.0
 _REACH_REWARD_COEF = 25.0
-_GRASP_REWARD_COEF = 30.0
-_PLACE_REWARD_COEF = 250.0
+_GRASP_REWARD_COEF = 100.0
+_PLACE_REWARD_COEF = 100.0
 
 # Define indexes of important elements for easy reference
 # Index 0 - 15: Pairs of sin(angle), cos(angle) for 8 joints (first 4 arms joints, then 4 gripper joints)
@@ -71,7 +74,6 @@ FETCH_INDEX_DICT = dict(
 def scaled_dist(dist: np.ndarray):
     return 1.0 - np.tanh(np.arctanh(np.sqrt(0.95)) / 0.8 * dist)
 
-
 def reward(last_obs: np.ndarray,
            obs: np.ndarray,
            action: np.ndarray,
@@ -86,23 +88,56 @@ def reward(last_obs: np.ndarray,
 
     # Assign rewards based on the option engaged
     reach_reward = _REACH_REWARD_COEF * (scaled_dist(reach_dist) - scaled_dist(last_reach_dist))
-    grasp_reward = _GRASP_REWARD_COEF * (grasp_success - last_grasp_success)
-    place_reward = _PLACE_REWARD_COEF * grasp_success * (scaled_dist(place_dist) - scaled_dist(last_place_dist))
-    place_reward_penalty = _PLACE_REWARD_COEF * (grasp_success * scaled_dist(place_dist) -
-                                                 last_grasp_success * scaled_dist(last_place_dist))
+    grasp_reward = _GRASP_REWARD_COEF * (grasp_success - last_grasp_success) * scaled_dist(place_dist)
+    place_reward = _PLACE_REWARD_COEF * last_grasp_success * (scaled_dist(place_dist) - scaled_dist(last_place_dist))
 
     if len(option_id.shape) < 2:
         option_id = np.expand_dims(option_id, axis=-1)
 
     rew = \
         np.where(option_id == 0,
-                 reach_reward + np.clip(grasp_reward, None, 0.) + np.clip(place_reward_penalty, None, 0.),
+                 reach_reward + np.clip(grasp_reward, None, 0.) + np.clip(place_reward, None, 0.),
                  0.) +\
         np.where(option_id == 1,
-                 grasp_reward + np.clip(reach_reward, None, 0.) + np.clip(place_reward_penalty, None, 0.),
+                 grasp_reward + np.clip(reach_reward, None, 0.) + np.clip(place_reward, None, 0.),
                  0.) +\
         np.where(option_id == 2,
                  place_reward + np.clip(grasp_reward, None, 0.) + np.clip(reach_reward, None, 0.),
                  0.)
 
     return rew
+
+# def reward(last_obs: np.ndarray,
+#            obs: np.ndarray,
+#            action: np.ndarray,
+#            option_id: np.ndarray):
+#     last_reach_dist, reach_dist = last_obs[..., INDEX_DICT['reach_dist']], obs[..., INDEX_DICT['reach_dist']]
+#     last_grasp_success, grasp_success = last_obs[..., INDEX_DICT['grasped']], obs[..., INDEX_DICT['grasped']]
+#     last_place_dist, place_dist = last_obs[..., INDEX_DICT['place_dist']], obs[..., INDEX_DICT['place_dist']]
+#
+#     # last_reach_dist, reach_dist = last_obs[..., FETCH_INDEX_DICT['reach_dist']], obs[..., FETCH_INDEX_DICT['reach_dist']]
+#     # last_grasp_success, grasp_success = last_obs[..., FETCH_INDEX_DICT['grasped']], obs[..., FETCH_INDEX_DICT['grasped']]
+#     # last_place_dist, place_dist = last_obs[..., FETCH_INDEX_DICT['place_dist']], obs[..., FETCH_INDEX_DICT['place_dist']]
+#
+#     # Assign rewards based on the option engaged
+#     reach_reward = _REACH_REWARD_COEF * (scaled_dist(reach_dist) - scaled_dist(last_reach_dist))
+#     grasp_reward = _GRASP_REWARD_COEF * (grasp_success - last_grasp_success)
+#     place_reward = _PLACE_REWARD_COEF * grasp_success * (scaled_dist(place_dist) - scaled_dist(last_place_dist))
+#     place_reward_penalty = _PLACE_REWARD_COEF * (grasp_success * scaled_dist(place_dist) -
+#                                                  last_grasp_success * scaled_dist(last_place_dist))
+#
+#     if len(option_id.shape) < 2:
+#         option_id = np.expand_dims(option_id, axis=-1)
+#
+#     rew = \
+#         np.where(option_id == 0,
+#                  reach_reward + np.clip(grasp_reward, None, 0.) + np.clip(place_reward_penalty, None, 0.),
+#                  0.) +\
+#         np.where(option_id == 1,
+#                  grasp_reward + np.clip(reach_reward, None, 0.) + np.clip(place_reward_penalty, None, 0.),
+#                  0.) +\
+#         np.where(option_id == 2,
+#                  place_reward + np.clip(grasp_reward, None, 0.) + np.clip(reach_reward, None, 0.),
+#                  0.)
+#
+#     return rew
