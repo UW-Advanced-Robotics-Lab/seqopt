@@ -4,6 +4,8 @@ from dm_control import suite
 from gym.envs.registration import registry, register, make, spec
 
 from seqopt.environments import manipulator
+from .kitchen.adept_envs import adept_envs
+
 
 # Export any custom dm_control environments
 suite._DOMAINS.update({name: module for name, module in locals().items()
