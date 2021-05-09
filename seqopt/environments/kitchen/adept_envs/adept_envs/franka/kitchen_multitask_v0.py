@@ -35,7 +35,7 @@ class KitchenV0(robot_env.RobotEnv):
         os.path.dirname(__file__),
         '../franka/assets/franka_kitchen_jntpos_act_ab.xml')
     N_DOF_ROBOT = 9
-    N_DOF_OBJECT = 21
+    N_DOF_OBJECT = 1
 
     def __init__(self, robot_params={}, frame_skip=40):
         self.goal_concat = True
@@ -87,11 +87,22 @@ class KitchenV0(robot_env.RobotEnv):
         self.ids = dict()
 
         # Add geoms
+        # Get all geom ids for the right and left fingers
+        left_finger_body_id = self.sim.model.name2id('panda0_leftfinger', 'body')
+        left_finger_geomadr = self.sim.model.body_geomadr[left_finger_body_id]
+        left_finger_ngeoms = self.sim.model.body_geomnum[left_finger_body_id]
+        left_finger_geoms = [geom_num for geom_num in range(left_finger_geomadr,
+                                                            left_finger_geomadr + left_finger_ngeoms)]
+        right_finger_body_id = self.sim.model.name2id('panda0_rightfinger', 'body')
+        right_finger_geomadr = self.sim.model.body_geomadr[right_finger_body_id]
+        right_finger_ngeoms = self.sim.model.body_geomnum[right_finger_body_id]
+        right_finger_geoms = [geom_num for geom_num in range(right_finger_geomadr,
+                                                             right_finger_geomadr + right_finger_ngeoms)]
         self.ids['geoms'] = dict()
         self.ids['geoms'].update({
             'slide_handle': self.sim.model.name2id('slide_handle', 'geom'),
-            'left_finger_col': self.sim.model.name2id('panda0_leftfinger_col', 'geom'),
-            'right_finger_col': self.sim.model.name2id('panda0_rightfinger_col', 'geom')
+            'left_finger_col': set(left_finger_geoms),
+            'right_finger_col': set(right_finger_geoms)
         })
 
         # Add sites
@@ -132,12 +143,14 @@ class KitchenV0(robot_env.RobotEnv):
         done = False
 
         # finalize step
+        # TODO(someshdaga): Figure out what to do about the rendered images. This really slows down the simulation
+        #                   even when we are not actively rendering the environment
         env_info = {
             'time': self.obs_dict['t'],
             'obs_dict': self.obs_dict,
             'rewards': reward_dict,
             'score': score,
-            'images': np.asarray(self.render(mode='rgb_array'))
+            # 'images': np.asarray(self.render(mode='rgb_array'))
         }
         # self.render()
         return obs, reward_dict['r_total'], done, env_info
@@ -159,8 +172,13 @@ class KitchenV0(robot_env.RobotEnv):
         #   1. Both left and right fingers are in contact with the handle
         #   2. x position of handle should be (somewhere) in between x positions of the contact locations (to ensure
         #      the fingers grab on either side of the handle)
+        #   3. The grasp site should fall within the cross-sectional area of the handle
         left_finger_contact_pos = None
         right_finger_contact_pos = None
+        # print(f"Geoms IDS: Handle: {self.ids['geoms']['slide_handle']}, "
+        #       f"Left Finger: {self.ids['geoms']['left_finger_col']}, "
+        #       f"Right Finger: {self.ids['geoms']['right_finger_col']}")
+        # print(f"Contacts: {[(c.geom1, c.geom2) for c in self.sim.data.contact]}")
         for contact in self.sim.data.contact:
             # If we have already determined contact locations for both fingers, stop searching
             if left_finger_contact_pos is not None and right_finger_contact_pos is not None:
@@ -168,32 +186,53 @@ class KitchenV0(robot_env.RobotEnv):
 
             # Check if the door handle is involved in the contact
             if self.ids['geoms']['slide_handle'] in [contact.geom1, contact.geom2]:
+
+                # Convert contact geoms to a set (since elements are guaranteed to be unique)
+                contact_set = {contact.geom1, contact.geom2}
+
                 # Check if the left finger was involved in the contact
-                if self.ids['geoms']['left_finger_col'] in [contact.geom1, contact.geom2]:
+                if left_finger_contact_pos is None and \
+                    len(self.ids['geoms']['left_finger_col'].intersection(contact_set)) > 0:
                     left_finger_contact_pos = contact.pos.copy()
+                    # print(f"Handle pos: {self.sim.data.geom_xpos[self.ids['geoms']['slide_handle']]}")
+                    # print(f"Left finger pos: {left_finger_contact_pos}")
 
                 # Check if the right finger was involved in the contact
-                if self.ids['geoms']['right_finger_col'] in [contact.geom1, contact.geom2]:
+                if right_finger_contact_pos is None and \
+                    len(self.ids['geoms']['right_finger_col'].intersection(contact_set)) > 0:
                     right_finger_contact_pos = contact.pos.copy()
+                    # print(f"Right finger pos: {right_finger_contact_pos}")
 
         if left_finger_contact_pos is not None and right_finger_contact_pos is not None:
             # print(f"Contact Positions - Left Finger: {left_finger_contact_pos}, "
             #       f"Right Finger: {right_finger_contact_pos} \n"
             #       f"Handle Position - {self.sim.data.geom_xpos[self.ids['geoms']['slide_handle']]}")
-            # Get the mean x value of the contacts
-            contact_mean_x = .5 * (left_finger_contact_pos[0] + right_finger_contact_pos[0])
+            handle_pos = self.sim.data.geom_xpos[self.ids['geoms']['slide_handle']]
 
-            # Get the x value of the center of the door handle
-            handle_x = self.sim.data.geom_xpos[self.ids['geoms']['slide_handle']][0]
+            # Get the distance of the grasp site from the handle in the x-y plane
+            radial_dist = np.linalg.norm(grip_pos[:2] - handle_pos[:2])
 
-            # If the mean x value is within half the radius of the center of the handle, we consider it gripped
-            if np.abs(handle_x - contact_mean_x) <= 0.011:
+            # If the grasp site is within the area of the handle (along with both fingers making
+            # contact with the handle), consider the handle grasped
+            if radial_dist <= 0.022:
                 grasped = np.float32(1.0)
-                # print("Grasped handle!")
+                # print(f"GRASPED!!!!!!!!!!!!!!!!!")
             else:
-                grasped = np.float32(0.0)
+                grasped = np.float(0.0)
+
+            # Get the mean x value of the contacts
+            # contact_mean_x = .5 * (left_finger_contact_pos[0] + right_finger_contact_pos[0])
+            # Get the x value of the center of the door handle
+            # handle_x = handle_pos[0]
+            # If the mean x value is within half the radius of the center of the handle, we consider it gripped
+            # if np.abs(handle_x - contact_mean_x) <= 0.011:
+            #     grasped = np.float32(1.0)
+            #     # print("Grasped!")
+            # else:
+            #     grasped = np.float32(0.0)
         else:
             grasped = np.float32(0.0)
+        # print('---')
 
         self.obs_dict = {}
         self.obs_dict['t'] = t
@@ -209,8 +248,7 @@ class KitchenV0(robot_env.RobotEnv):
         self.obs_dict['reach_dist'] = reach_dist
 
         if self.goal_concat:
-            print(f"Obs dict: {self.obs_dict}")
-            return np.concatenate([self.obs_dict['qp'], self.obs_dict['obj_qp'], self.obs_dict['goal'],
+            return np.concatenate([self.obs_dict['qp'], self.obs_dict['obj_qp'],
                                    self.obs_dict['handle_pos'],
                                    np.expand_dims(self.obs_dict['fingertip_dist'], 0),
                                    np.expand_dims(self.obs_dict['grasped'], 0),

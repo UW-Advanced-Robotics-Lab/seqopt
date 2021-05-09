@@ -22,9 +22,9 @@ class ActorParams:
     default_action: Union[Callable[[th.Tensor], th.Tensor], th.Tensor]
     observation_mask: Optional[Union[Iterable[Union[int, bool]], slice]] = None
     action_mask: Optional[np.ndarray] = None
-    lr_schedule: Union[float, Schedule] = 3e-4
+    lr_schedule: Union[float, Schedule] = 1e-3
     net_arch: Optional[List[Union[int, Dict[str, List[int]]]]] = None
-    ent_coef: float = 1e-3
+    ent_coef: float = 1e-4
     activation_fn: Type[th.nn.Module] = th.nn.ReLU
     max_grad_norm: float = 0.5
     optimizer_class: Type[th.optim.Optimizer] = th.optim.Adam
@@ -48,10 +48,10 @@ class CriticParams:
 @dataclass
 class TerminatorParams:
     observation_mask: Optional[Union[Iterable[Union[int, bool]], slice]] = None
-    lr_schedule: Union[float, Schedule] = 5e-7
+    lr_schedule: Union[float, Schedule] = 5e-8
     net_arch: Optional[List[int]] = None
     use_boltzmann: bool = True     # Use Boltzmann (Softmax) distribution to compute probabilities for termination
-    ent_coef: float = 0.0
+    ent_coef: float = 5e-2
     activation_fn: Type[th.nn.Module] = th.nn.ReLU
     max_grad_norm: float = 0.5
     optimizer_class: Type[th.optim.Optimizer] = th.optim.Adam

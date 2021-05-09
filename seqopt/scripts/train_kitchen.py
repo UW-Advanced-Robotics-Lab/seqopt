@@ -143,7 +143,7 @@ if __name__ == '__main__':
         reach_exploration_params = None
 
         # Set actor parameters
-        reach_actor_params.net_arch = [200, 100]
+        reach_actor_params.net_arch = [200, 200]
         reach_actor_params.observation_mask = np.concatenate([
             kitchen_utils.INDEX_DICT['joints_pos'],
             kitchen_utils.INDEX_DICT['handle_pos'],
@@ -266,7 +266,7 @@ if __name__ == '__main__':
             total_timesteps=args.total_steps,
             reward_func=kitchen_utils.reward,
             callback=checkpoint_callback,
-            log_interval=3,
+            log_interval=1,
             eval_env=eval_vec_env,
             eval_freq=args.eval_freq,
             n_eval_episodes=args.n_eval_episodes,

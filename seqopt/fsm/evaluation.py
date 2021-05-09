@@ -102,17 +102,17 @@ def evaluate_policy(
             if render:
                 # This call works with standard gym environments, but not with dm_control environments
                 # UNCOMMENT IF WORKING WITH STANDARD GYM ENVIRONMENTS
-                # env.render()
+                env.render()
                 print(f'Episode {i + 1}/{n_eval_episodes} - '
                       f'Step {episode_length}/{env.envs[0].env._max_episode_steps} - '
                       f'Option {active_option} - '
                       f'Immediate Reward: {reward} - '
                       f'Reward {episode_reward}',
                       end='\n')
-                # COMMENT BELOW IF WORKING WITH STANDARD GYM ENVIRONMENTS
-                frame = env.envs[0].env.physics.render(height=480, width=640, camera_id=0)
-                image.set_data(frame)
-                plt.pause(0.001)
+                # # COMMENT BELOW IF WORKING WITH STANDARD GYM ENVIRONMENTS
+                # frame = env.envs[0].env.physics.render(height=480, width=640, camera_id=0)
+                # image.set_data(frame)
+                # plt.pause(0.001)
 
             if terminate:
                 active_option = (active_option + 1) % model.num_options

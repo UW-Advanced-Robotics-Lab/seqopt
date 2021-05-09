@@ -18,11 +18,11 @@ _SLIDE_REWARD_COEF = 100.0
 INDEX_DICT = dict(
     joints_pos=np.arange(9),
     slide_qpos=np.arange(9, 10),
-    handle_pos=np.arange(60, 63),       # Can use this in the neural network, although not part of the original obs
-    fingertip_dist=np.arange(63, 64),   # DO NOT USE IN NEURAL NETWORKS
-    grasped=np.arange(64, 65),          # DO NOT USE IN NEURAL NETWORKS
-    slide_dist=np.arange(65, 66),       # DO NOT USE IN NEURAL NETWORKS
-    reach_dist=np.arange(66, 67)        # DO NOT USE IN NEURAL NETWORKS
+    handle_pos=np.arange(10, 13),       # Can use this in the neural network, although not part of the original obs
+    fingertip_dist=np.arange(13, 14),   # DO NOT USE IN NEURAL NETWORKS
+    grasped=np.arange(14, 15),          # DO NOT USE IN NEURAL NETWORKS
+    slide_dist=np.arange(15, 16),       # DO NOT USE IN NEURAL NETWORKS
+    reach_dist=np.arange(16, 17)        # DO NOT USE IN NEURAL NETWORKS
 )
 
 
@@ -40,8 +40,9 @@ def reward(last_obs: np.ndarray,
 
     # Assign rewards based on the option engaged
     reach_reward = _REACH_REWARD_COEF * (scaled_dist(reach_dist) - scaled_dist(last_reach_dist))
-    grasp_reward = _GRASP_REWARD_COEF * (grasp_success - last_grasp_success) * scaled_dist(slide_dist)
-    slide_reward = _SLIDE_REWARD_COEF * last_grasp_success * (scaled_dist(slide_dist) - scaled_dist(last_slide_dist))
+    grasp_reward = _GRASP_REWARD_COEF * (grasp_success - last_grasp_success) * scaled_dist(slide_dist, scale=0.65)
+    slide_reward = _SLIDE_REWARD_COEF * last_grasp_success * (scaled_dist(slide_dist, scale=0.65) -
+                                                              scaled_dist(last_slide_dist, scale=0.65))
 
     if len(option_id.shape) < 2:
         option_id = np.expand_dims(option_id, axis=-1)

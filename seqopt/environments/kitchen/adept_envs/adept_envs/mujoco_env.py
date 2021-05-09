@@ -152,8 +152,10 @@ class MujocoEnv(gym.Env):
         return self.model.opt.timestep * self.frame_skip
 
     def do_simulation(self, ctrl, n_frames):
+        # Perform gravity compensation to ensure that zero velocities keep the robot still
         for i in range(self.model.nu):
-            self.sim.data.ctrl[i] = ctrl[i]
+            gravity_comp_torque = self.sim.data.qfrc_bias[i]
+            self.sim.data.ctrl[i] = ctrl[i] + gravity_comp_torque / self.sim.model.actuator_gainprm[i][0]
 
         for _ in range(n_frames):
             self.sim.step()

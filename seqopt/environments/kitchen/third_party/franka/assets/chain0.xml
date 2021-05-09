@@ -45,7 +45,7 @@
                                         <inertial pos="-1.57863e-05 0.0118731 0.0434103" quat="0.705868 0.0310348 -0.0314925 0.706962" mass="0.0927059" diaginertia="6.57134e-05 6.09611e-05 1.09932e-05" />
                                         <joint name="panda0_finger_joint1"  axis="0 1 0" type="slide" range="0 0.04" class="panda_finger"/>
                                         <geom class="panda_viz" mesh="finger_viz"/>
-                                        <geom name="panda0_leftfinger_col" class="panda_col" mesh="finger_col"/>
+<!--                                        <geom name="panda0_leftfinger_col" class="panda_col" mesh="finger_col"/>-->
                                         <geom size="0.0070" fromto=".009 .006 .0875   -.009 .009 .0875" type="capsule" />
                                         <geom size="0.0070" fromto=".009 .009 .0875   -.009 .006 .0875" type="capsule" />
 
@@ -71,7 +71,7 @@
                                         <inertial pos="1.57863e-05 -0.0118731 0.0434103" quat="0.705868 -0.0310348 0.0314925 0.706962" mass="0.0927059" diaginertia="6.57134e-05 6.09611e-05 1.09932e-05" />
                                         <joint name="panda0_finger_joint2" axis="0 -1 0" type="slide" range="0 0.04" class="panda_finger"/>
                                         <geom quat="0 0 0 1" class="panda_viz" mesh="finger_viz"/>
-                                        <geom name="panda0_rightfinger_col" class="panda_col" mesh="finger_col"/>
+<!--                                        <geom name="panda0_rightfinger_col" class="panda_col" mesh="finger_col"/>-->
                                         <geom size="0.0070" fromto=".009 -.006 .0875   -.009 -.009 .0875" type="capsule" />
                                         <geom size="0.0070" fromto=".009 -.009 .0875   -.009 -.006 .0875" type="capsule" />
 
