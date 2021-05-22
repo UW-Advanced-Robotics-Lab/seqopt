@@ -39,7 +39,7 @@
             <geom material="M_hinge_metal" pos="-0.302 -0.061 -0.114" euler="1.57 0 0" size="0.019 0.053 0.02" type="cylinder"/>
             <geom material="M_hinge_metal" pos="-0.302 -0.061 0.114" euler="1.57 0 0" size="0.019 0.053 0.02" type="cylinder"/>
 
-            <geom class="hinge_collision" pos="-0.302 -0.128 0" size="0.022 0.16" type="cylinder" mass=".1"/>
+            <geom name="rightdoor_handle" class="hinge_collision" pos="-0.302 -0.128 0" size="0.022 0.16" type="cylinder" mass=".1"/>
             <geom class="hinge_collision" pos="-0.302 -0.061 -0.114" euler="1.57 0 0" size="0.019 0.053 0.02" type="cylinder" mass=".02"/>
             <geom class="hinge_collision" pos="-0.302 -0.061 0.114" euler="1.57 0 0" size="0.019 0.053 0.02" type="cylinder" mass=".02"/>
             <geom class="hinge_collision" pos="-0.185 -.015 0" size="0.193 0.03 0.2" type="box" mass=".2"/>

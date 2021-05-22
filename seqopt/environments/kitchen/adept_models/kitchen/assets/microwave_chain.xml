@@ -18,7 +18,7 @@
             <geom material="micro_metal" euler="1.57 0 0" pos="0.475 -0.075 .13" size="0.02 0.03" type="capsule"/>
             <geom material="micro_metal" euler="1.57 0 0" pos="0.475 -0.075 -.13" size="0.02 0.03" type="capsule"/>
 
-            <geom class="micro_collision" pos="0.475 -0.108 0" size="0.02 0.13" type="capsule" mass="0.020"/>
+            <geom name="microwave_handle" class="micro_collision" pos="0.475 -0.108 0" size="0.02 0.13" type="capsule" mass="0.020"/>
             <geom class="micro_collision" euler="1.57 0 0" pos="0.475 -0.075 .13" size="0.02 0.03" type="capsule" mass="0.020"/>
             <geom class="micro_collision" euler="1.57 0 0" pos="0.475 -0.075 -.13" size="0.02 0.03" type="capsule" mass="0.020"/>
             <geom class="micro_collision" pos="0.259 -0.026 0" size="0.259 0.024 0.185" type="box" mass="0.20"/>

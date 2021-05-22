@@ -1,0 +1,383 @@
+<mujoco model="base">
+  <compiler angle="radian" meshdir="meshes/" />
+  <option cone="elliptic" impratio="20" />
+  <size nconmax="5000" njmax="5000" />
+
+  <asset>
+  <texture builtin="gradient" height="256" rgb1=".9 .9 1." rgb2=".2 .3 .4" type="skybox" width="256" />
+    <texture file="/home/somesh/robosuite/robosuite/models/assets/arenas/../textures/wood-tiles.png" name="texplane" type="2d" />
+    <material name="floorplane" reflectance="0.01" shininess="0.0" specular="0.0" texrepeat="2 2" texture="texplane" texuniform="true" />
+    
+    <texture file="/home/somesh/robosuite/robosuite/models/assets/arenas/../textures/steel-brushed.png" name="tex-steel-brushed" type="cube" />
+    <material name="table_legs_metal" reflectance="0.8" shininess="0.8" texrepeat="1 1" texture="tex-steel-brushed" />
+    
+    <texture file="/home/somesh/robosuite/robosuite/models/assets/arenas/../textures/cream-plaster.png" name="tex-cream-plaster" type="2d" />
+    <material name="walls_mat" reflectance="0.0" shininess="0.1" specular="0.1" texrepeat="3 3" texture="tex-cream-plaster" texuniform="true" />
+    
+    <texture file="/home/somesh/robosuite/robosuite/models/assets/arenas/../textures/light-wood.png" name="tex-light-wood" type="2d" />
+    <texture file="/home/somesh/robosuite/robosuite/models/assets/arenas/../textures/dark-wood.png" name="tex-dark-wood" type="2d" />
+    <material name="light-wood" reflectance="0" texrepeat="15 15" texture="tex-light-wood" texuniform="true" />
+    <material name="dark-wood" reflectance="0" texrepeat="5 5" texture="tex-dark-wood" texuniform="true" />
+  <mesh file="/home/somesh/robosuite/robosuite/models/assets/robots/wam/../common_meshes/pedestal.stl" name="robot0_pedestal" />
+        
+        <mesh file="/home/somesh/robosuite/robosuite/models/assets/robots/wam/meshes/base_link_fine.stl" name="robot0_base_link_fine" />
+        <mesh file="/home/somesh/robosuite/robosuite/models/assets/robots/wam/meshes/base_link_convex.stl" name="robot0_base_link_convex" />
+        <mesh file="/home/somesh/robosuite/robosuite/models/assets/robots/wam/meshes/shoulder_link_fine.stl" name="robot0_shoulder_link_fine" />
+        <mesh file="/home/somesh/robosuite/robosuite/models/assets/robots/wam/meshes/shoulder_link_convex_decomposition_p1.stl" name="robot0_shoulder_link_convex_decomposition_p1" />
+        <mesh file="/home/somesh/robosuite/robosuite/models/assets/robots/wam/meshes/shoulder_link_convex_decomposition_p2.stl" name="robot0_shoulder_link_convex_decomposition_p2" />
+        <mesh file="/home/somesh/robosuite/robosuite/models/assets/robots/wam/meshes/shoulder_link_convex_decomposition_p3.stl" name="robot0_shoulder_link_convex_decomposition_p3" />
+        <mesh file="/home/somesh/robosuite/robosuite/models/assets/robots/wam/meshes/shoulder_pitch_link_fine.stl" name="robot0_shoulder_pitch_link_fine" />
+        <mesh file="/home/somesh/robosuite/robosuite/models/assets/robots/wam/meshes/shoulder_pitch_link_convex.stl" name="robot0_shoulder_pitch_link_convex" />
+        <mesh file="/home/somesh/robosuite/robosuite/models/assets/robots/wam/meshes/upper_arm_link_fine.stl" name="robot0_upper_arm_link_fine" />
+        <mesh file="/home/somesh/robosuite/robosuite/models/assets/robots/wam/meshes/upper_arm_link_convex_decomposition_p1.stl" name="robot0_upper_arm_link_convex_decomposition_p1" />
+        <mesh file="/home/somesh/robosuite/robosuite/models/assets/robots/wam/meshes/upper_arm_link_convex_decomposition_p2.stl" name="robot0_upper_arm_link_convex_decomposition_p2" />
+        <mesh file="/home/somesh/robosuite/robosuite/models/assets/robots/wam/meshes/elbow_link_fine.stl" name="robot0_elbow_link_fine" />
+        <mesh file="/home/somesh/robosuite/robosuite/models/assets/robots/wam/meshes/elbow_link_convex.stl" name="robot0_elbow_link_convex" />
+        <mesh file="/home/somesh/robosuite/robosuite/models/assets/robots/wam/meshes/forearm_link_fine.stl" name="robot0_forearm_link_fine" />
+        <mesh file="/home/somesh/robosuite/robosuite/models/assets/robots/wam/meshes/forearm_link_convex_decomposition_p1.stl" name="robot0_forearm_link_convex_decomposition_p1" />
+        <mesh file="/home/somesh/robosuite/robosuite/models/assets/robots/wam/meshes/forearm_link_convex_decomposition_p2.stl" name="robot0_forearm_link_convex_decomposition_p2" />
+        <mesh file="/home/somesh/robosuite/robosuite/models/assets/robots/wam/meshes/wrist_yaw_link_fine.stl" name="robot0_wrist_yaw_link_fine" />
+        <mesh file="/home/somesh/robosuite/robosuite/models/assets/robots/wam/meshes/wrist_yaw_link_convex_decomposition_p1.stl" name="robot0_wrist_yaw_link_convex_decomposition_p1" />
+        <mesh file="/home/somesh/robosuite/robosuite/models/assets/robots/wam/meshes/wrist_yaw_link_convex_decomposition_p2.stl" name="robot0_wrist_yaw_link_convex_decomposition_p2" />
+        <mesh file="/home/somesh/robosuite/robosuite/models/assets/robots/wam/meshes/wrist_pitch_link_fine.stl" name="robot0_wrist_pitch_link_fine" />
+        <mesh file="/home/somesh/robosuite/robosuite/models/assets/robots/wam/meshes/wrist_pitch_link_convex_decomposition_p1.stl" name="robot0_wrist_pitch_link_convex_decomposition_p1" />
+        <mesh file="/home/somesh/robosuite/robosuite/models/assets/robots/wam/meshes/wrist_pitch_link_convex_decomposition_p2.stl" name="robot0_wrist_pitch_link_convex_decomposition_p2" />
+        <mesh file="/home/somesh/robosuite/robosuite/models/assets/robots/wam/meshes/wrist_pitch_link_convex_decomposition_p3.stl" name="robot0_wrist_pitch_link_convex_decomposition_p3" />
+        <mesh file="/home/somesh/robosuite/robosuite/models/assets/robots/wam/meshes/wrist_palm_link_fine.stl" name="robot0_wrist_palm_link_fine" />
+        <mesh file="/home/somesh/robosuite/robosuite/models/assets/robots/wam/meshes/wrist_palm_link_convex.stl" name="robot0_wrist_palm_link_convex" />
+
+        
+        <texture builtin="flat" height="100" name="robot0_pedestal_tex" rgb1="0.2 0.2 0.2" rgb2="0.2 0.2 0.2" type="cube" width="100" />
+
+        
+        <material name="robot0_pedestal_mat" texture="robot0_pedestal_tex" />
+    <mesh file="/home/somesh/robosuite/robosuite/models/assets/grippers/meshes/wam_barrett_gripper/bhand_palm_fine.stl" name="gripper0_bhand_palm_fine" />
+        <mesh file="/home/somesh/robosuite/robosuite/models/assets/grippers/meshes/wam_barrett_gripper/bhand_palm_link_convex_decomposition_p1.stl" name="gripper0_bhand_palm_link_convex_decomposition_p1" />
+        <mesh file="/home/somesh/robosuite/robosuite/models/assets/grippers/meshes/wam_barrett_gripper/bhand_palm_link_convex_decomposition_p2.stl" name="gripper0_bhand_palm_link_convex_decomposition_p2" />
+        <mesh file="/home/somesh/robosuite/robosuite/models/assets/grippers/meshes/wam_barrett_gripper/bhand_palm_link_convex_decomposition_p3.stl" name="gripper0_bhand_palm_link_convex_decomposition_p3" />
+        <mesh file="/home/somesh/robosuite/robosuite/models/assets/grippers/meshes/wam_barrett_gripper/bhand_palm_link_convex_decomposition_p4.stl" name="gripper0_bhand_palm_link_convex_decomposition_p4" />
+        <mesh file="/home/somesh/robosuite/robosuite/models/assets/grippers/meshes/wam_barrett_gripper/bhand_finger_prox_link_fine.stl" name="gripper0_bhand_finger_prox_link_fine" />
+        <mesh file="/home/somesh/robosuite/robosuite/models/assets/grippers/meshes/wam_barrett_gripper/bhand_finger_prox_link_convex_decomposition_p1.stl" name="gripper0_bhand_finger_prox_link_convex_decomposition_p1" />
+        <mesh file="/home/somesh/robosuite/robosuite/models/assets/grippers/meshes/wam_barrett_gripper/bhand_finger_prox_link_convex_decomposition_p2.stl" name="gripper0_bhand_finger_prox_link_convex_decomposition_p2" />
+        <mesh file="/home/somesh/robosuite/robosuite/models/assets/grippers/meshes/wam_barrett_gripper/bhand_finger_prox_link_convex_decomposition_p3.stl" name="gripper0_bhand_finger_prox_link_convex_decomposition_p3" />
+        <mesh file="/home/somesh/robosuite/robosuite/models/assets/grippers/meshes/wam_barrett_gripper/bhand_finger_med_link_fine.stl" name="gripper0_bhand_finger_med_link_fine" />
+        <mesh file="/home/somesh/robosuite/robosuite/models/assets/grippers/meshes/wam_barrett_gripper/bhand_finger_med_link_convex.stl" name="gripper0_bhand_finger_med_link_convex" />
+        <mesh file="/home/somesh/robosuite/robosuite/models/assets/grippers/meshes/wam_barrett_gripper/bhand_finger_dist_link_fine.stl" name="gripper0_bhand_finger_dist_link_fine" />
+        <mesh file="/home/somesh/robosuite/robosuite/models/assets/grippers/meshes/wam_barrett_gripper/bhand_finger_dist_link_convex.stl" name="gripper0_bhand_finger_dist_link_convex" />
+    <mesh file="/home/somesh/robosuite/robosuite/models/assets/objects/meshes/milk.stl" name="milk_mesh" scale="0.9 0.9 0.9" />
+    <texture file="/home/somesh/robosuite/robosuite/models/assets/objects/../textures/ceramic.png" name="tex-ceramic" />
+    <material name="ceramic" reflectance="0.5" texrepeat="1 1" texture="tex-ceramic" texuniform="true" />
+  <mesh file="/home/somesh/robosuite/robosuite/models/assets/objects/meshes/bread.stl" name="bread_mesh" scale="0.8 0.8 0.8" />
+    <texture file="/home/somesh/robosuite/robosuite/models/assets/objects/../textures/bread.png" name="tex-bread" type="2d" />
+    <material name="bread" reflectance="0.7" texrepeat="15 15" texture="tex-bread" texuniform="true" />
+  <mesh file="/home/somesh/robosuite/robosuite/models/assets/objects/meshes/cereal.stl" name="cereal_mesh" scale="0.4 1.0 0.4" />
+    <texture file="/home/somesh/robosuite/robosuite/models/assets/objects/../textures/cereal.png" name="tex-cereal" rgb1="1 1 1" type="cube" />
+    <material name="cereal" reflectance="0.5" texrepeat="3 3" texture="tex-cereal" texuniform="false" />
+  <mesh file="/home/somesh/robosuite/robosuite/models/assets/objects/meshes/can.stl" name="can_mesh" />
+    <texture file="/home/somesh/robosuite/robosuite/models/assets/objects/../textures/can.png" name="tex-can" />
+    <material name="coke" reflectance="0.7" texrepeat="5 5" texture="tex-can" texuniform="true" />
+  </asset>
+
+  <visual>
+    <map znear="0.001" />
+  </visual>
+
+  <actuator>
+  <motor ctrllimited="true" ctrlrange="-70 70" joint="robot0_wam_joint_1" name="robot0_torq_j1" />
+        <motor ctrllimited="true" ctrlrange="-70 70" joint="robot0_wam_joint_2" name="robot0_torq_j2" />
+        <motor ctrllimited="true" ctrlrange="-70 70" joint="robot0_wam_joint_3" name="robot0_torq_j3" />
+        <motor ctrllimited="true" ctrlrange="-70 70" joint="robot0_wam_joint_4" name="robot0_torq_j4" />
+        <motor ctrllimited="true" ctrlrange="-70 70" joint="robot0_wam_joint_5" name="robot0_torq_j5" />
+        <motor ctrllimited="true" ctrlrange="-70 70" joint="robot0_wam_joint_6" name="robot0_torq_j6" />
+        <motor ctrllimited="true" ctrlrange="-70 70" joint="robot0_wam_joint_7" name="robot0_torq_j7" />
+    <position ctrllimited="true" ctrlrange="0 2.0" forcelimited="true" forcerange="-1.0 1.0" joint="gripper0_wam/bhand/index/med_joint" kp="10" name="gripper0_index_med" user="1" />
+        <position ctrllimited="true" ctrlrange="0 0.83" forcelimited="true" forcerange="-1.0 1.0" joint="gripper0_wam/bhand/index/dist_joint" kp="10" name="gripper0_index_dist" user="1" />
+        <position ctrllimited="true" ctrlrange="0 2.0" forcelimited="true" forcerange="-1.0 1.0" joint="gripper0_wam/bhand/middle/med_joint" kp="10" name="gripper0_middle_med" user="1" />
+        <position ctrllimited="true" ctrlrange="0 0.83" forcelimited="true" forcerange="-0.5 0.5" joint="gripper0_wam/bhand/middle/dist_joint" kp="5" name="gripper0_middle_dist" user="1" />
+        <position ctrllimited="true" ctrlrange="0 2.0" forcelimited="true" forcerange="-0.5 0.5" joint="gripper0_wam/bhand/thumb/med_joint" kp="5" name="gripper0_thumb_med" user="1" />
+        <position ctrllimited="true" ctrlrange="0 0.83" forcelimited="true" forcerange="-0.5 0.5" joint="gripper0_wam/bhand/thumb/dist_joint" kp="5" name="gripper0_thumb_dist" user="1" />
+    </actuator>
+
+  <worldbody>
+  <geom condim="3" material="floorplane" name="floor" pos="0.0 0.0 0.0" size="3 3 .125" type="plane" />
+    
+    <geom conaffinity="0" contype="0" group="1" material="walls_mat" name="wall_leftcorner_visual" pos="-1.25 2.25 1.5" quat="0.6532815 0.6532815 0.2705981 0.2705981" size="1.06 1.5 0.01" type="box" />
+    <geom conaffinity="0" contype="0" group="1" material="walls_mat" name="wall_rightcorner_visual" pos="-1.25 -2.25 1.5" quat="0.6532815 0.6532815 -0.2705981 -0.2705981" size="1.06 1.5 0.01" type="box" />
+    <geom conaffinity="0" contype="0" group="1" material="walls_mat" name="wall_left_visual" pos="1.25 3.0 1.5" quat="0.7071 0.7071 0 0" size="1.75 1.5 0.01" type="box" />
+    <geom conaffinity="0" contype="0" group="1" material="walls_mat" name="wall_right_visual" pos="1.25 -3.0 1.5" quat="0.7071 -0.7071 0 0" size="1.75 1.5 0.01" type="box" />
+    <geom conaffinity="0" contype="0" group="1" material="walls_mat" name="wall_rear_visual" pos="-2.0 0.0 1.5" quat="0.5 0.5 0.5 0.5" size="1.5 1.5 0.01" type="box" />
+    <geom conaffinity="0" contype="0" group="1" material="walls_mat" name="wall_front_visual" pos="3.0 0.0 1.5" quat="0.5 0.5 -0.5 -0.5" size="3 1.5 0.01" type="box" />
+    
+    <body name="bin1" pos="0.1 -0.25 0.8">
+      <geom friction="1 0.005 0.0001" pos="0 0 0" size="0.2 0.25 0.02" type="box" />
+      <geom conaffinity="0" contype="0" group="1" material="light-wood" pos="0 0 0" size="0.2 0.25 0.02" type="box" />
+        <geom friction="1 0.005 0.0001" pos="0 0.25 0.05" rgba="0 0 1 1" size="0.21 0.01 0.05" type="box" />
+        <geom conaffinity="0" contype="0" group="1" material="light-wood" pos="0 0.25 0.05" size="0.21 0.01 0.05" type="box" />
+        <geom friction="1 0.005 0.0001" pos="0 -0.25 0.05" rgba="0 0 1 1" size="0.21 0.01 0.05" type="box" />
+        <geom conaffinity="0" contype="0" group="1" material="light-wood" pos="0 -0.25 0.05" size="0.21 0.01 0.05" type="box" />
+        <geom friction="1 0.005 0.0001" pos="0.2 0 0.05" rgba="0 0 1 1" size="0.01 0.25 0.05" type="box" />
+        <geom conaffinity="0" contype="0" group="1" material="light-wood" pos="0.2 0 0.05" size="0.01 0.25 0.05" type="box" />
+        <geom friction="1 0.005 0.0001" pos="-0.2 0 0.05" rgba="0 0 1 1" size="0.01 0.25 0.05" type="box" />
+        <geom conaffinity="0" contype="0" group="1" material="light-wood" pos="-0.2 0 0.05" size="0.01 0.25 0.05" type="box" />
+        
+        <geom conaffinity="0" contype="0" group="1" material="table_legs_metal" name="bin1_leg1_visual" pos="0.15 0.2 -0.4" size="0.01 0.4" type="cylinder" />
+        <geom conaffinity="0" contype="0" group="1" material="table_legs_metal" name="bin1_leg2_visual" pos="-0.15 0.2 -0.4" size="0.01 0.4" type="cylinder" />
+        <geom conaffinity="0" contype="0" group="1" material="table_legs_metal" name="bin1_leg3_visual" pos="-0.15 -0.2 -0.4" size="0.01 0.4" type="cylinder" />
+        <geom conaffinity="0" contype="0" group="1" material="table_legs_metal" name="bin1_leg4_visual" pos="0.15 -0.2 -0.4" size="0.01 0.4" type="cylinder" />
+    </body>
+    <body name="bin2" pos="0.1 0.28 0.8">
+      <geom friction="1 0.005 0.0001" pos="0 0 0" size="0.2 0.25 0.02" type="box" />
+      <geom conaffinity="0" contype="0" group="1" material="dark-wood" pos="0 0 0" size="0.2 0.25 0.02" type="box" />
+        <geom friction="1 0.005 0.0001" pos="0 0.25 0.05" rgba="1 0 0 1" size="0.21 0.01 0.05" type="box" />
+        <geom conaffinity="0" contype="0" group="1" material="dark-wood" pos="0 0.25 0.05" size="0.21 0.01 0.05" type="box" />
+        <geom friction="1 0.005 0.0001" pos="0 0 0.05" rgba="1 0 0 1" size="0.2 0.01 0.05" type="box" />
+        <geom conaffinity="0" contype="0" group="1" material="dark-wood" pos="0 0 0.05" size="0.2 0.01 0.05" type="box" />
+        <geom friction="1 0.005 0.0001" pos="0 -0.25 0.05" rgba="1 0 0 1" size="0.21 0.01 0.05" type="box" />
+        <geom conaffinity="0" contype="0" group="1" material="dark-wood" pos="0 -0.25 0.05" size="0.21 0.01 0.05" type="box" />
+        <geom friction="1 0.005 0.0001" pos="0.2 0 0.05" rgba="1 0 0 1" size="0.01 0.25 0.05" type="box" />
+        <geom conaffinity="0" contype="0" group="1" material="dark-wood" pos="0.2 0 0.05" size="0.01 0.25 0.05" type="box" />
+        <geom friction="1 0.005 0.0001" pos="0 0 0.05" rgba="1 0 0 1" size="0.01 0.25 0.05" type="box" />
+        <geom conaffinity="0" contype="0" group="1" material="dark-wood" pos="0 0 0.05" size="0.01 0.25 0.05" type="box" />
+        <geom friction="1 0.005 0.0001" pos="-0.2 0 0.05" rgba="1 0 0 1" size="0.01 0.25 0.05" type="box" />
+        <geom conaffinity="0" contype="0" group="1" material="dark-wood" pos="-0.2 0 0.05" size="0.01 0.25 0.05" type="box" />
+        
+        <geom conaffinity="0" contype="0" group="1" material="table_legs_metal" name="bin2_leg1_visual" pos="0.15 0.2 -0.4" size="0.01 0.4" type="cylinder" />
+        <geom conaffinity="0" contype="0" group="1" material="table_legs_metal" name="bin2_leg2_visual" pos="-0.15 0.2 -0.4" size="0.01 0.4" type="cylinder" />
+        <geom conaffinity="0" contype="0" group="1" material="table_legs_metal" name="bin2_leg3_visual" pos="-0.15 -0.2 -0.4" size="0.01 0.4" type="cylinder" />
+        <geom conaffinity="0" contype="0" group="1" material="table_legs_metal" name="bin2_leg4_visual" pos="0.15 -0.2 -0.4" size="0.01 0.4" type="cylinder" />
+    </body>
+
+    <light castshadow="false" diffuse=".8 .8 .8" dir="0 -.15 -1" directional="false" pos="1.0 1.0 4.0" specular="0.3 0.3 0.3" />
+    <light castshadow="false" diffuse=".8 .8 .8" dir="0 -.15 -1" directional="false" pos="-3.0 -3.0 4.0" specular="0.3 0.3 0.3" />
+    
+    <camera mode="fixed" name="frontview" pos="1.6 0.0 1.45" quat="0.56 0.43 0.43 0.56" />
+    
+    <camera mode="fixed" name="birdview" pos="-0.2 0.0 3.0" quat="0.7071 0 0 0.7071" />
+    
+    <camera mode="fixed" name="agentview" pos="1.0 0.0 1.75" quat="0.653 0.271 0.271 0.653" />
+  <body childclass="wam" name="robot0_base" pos="-0.5 -0.1 0.913">
+            
+            <camera mode="fixed" name="robot0_robotview" pos="1.0 0 0.4" quat="0.653 0.271 0.271 0.653" />
+            <body name="robot0_controller_box" pos="0 0 0">
+                <inertial diaginertia="1.71363 1.27988 0.809981" mass="46.64" pos="-0.325 0 -0.38" />
+                <geom name="robot0_controller_box_col" pos="-0.325 0 -0.38" size="0.11 0.2 0.265" type="box" />
+            </body>
+            <body name="robot0_pedestal_feet" pos="0 0 0">
+                <inertial diaginertia="8.16095 9.59375 15.0785" mass="167.09" pos="-0.1225 0 -0.758" />
+                <geom name="robot0_pedestal_feet_col" pos="-0.1225 0 -0.758" size="0.385 0.35 0.155" type="box" />
+            </body>
+            <body name="robot0_torso" pos="0 0 0">
+                <inertial diaginertia="1e-08 1e-08 1e-08" mass="0.0001" pos="0 0 0" />
+                <geom conaffinity="0" contype="0" group="1" name="robot0_torso_col" rgba="0.2 0.2 0.2 1" size="0.05 0.05 0.05" type="box" />
+            </body>
+            <body name="robot0_pedestal" pos="0 0 0">
+                <inertial diaginertia="6.0869 5.81635 4.20915" mass="60.864" pos="0 0 0" quat="0.659267 -0.259505 -0.260945 0.655692" />
+                <geom conaffinity="0" contype="0" group="1" material="robot0_pedestal_mat" mesh="robot0_pedestal" name="robot0_pedestal_col1" type="mesh" />
+                <geom name="robot0_pedestal_col2" pos="-0.02 0 -0.29" rgba="0.2 0.2 0.2 1" size="0.18 0.31" type="cylinder" />
+            </body>
+
+            <inertial diaginertia="0.1 0.1 0.1" mass="1" pos="0 0 0" />
+            <geom class="viz" mesh="robot0_base_link_fine" />
+            <geom class="col" mesh="robot0_base_link_convex" />
+            <body name="robot0_wam_link_1" pos="0 0 0.346">
+                <inertial diaginertia="0.135089 0.113095 0.0904426" mass="5" pos="-0.00443422 -0.00066489 -0.128904" quat="0.69566 0.716713 -0.0354863 0.0334839" />
+                <joint damping="1.98" name="robot0_wam_joint_1" range="-2.6 2.6" />
+                <geom class="viz" mesh="robot0_shoulder_link_fine" />
+                <geom class="col" mesh="robot0_shoulder_link_convex_decomposition_p1" />
+                <geom class="col" mesh="robot0_shoulder_link_convex_decomposition_p2" />
+                <geom class="col" mesh="robot0_shoulder_link_convex_decomposition_p3" />
+                <body name="robot0_wam_link_2" pos="0 0 0" quat="0.707107 -0.707107 0 0">
+                    <inertial diaginertia="0.0214195 0.0167127 0.0126452" mass="3.87494" pos="-0.00236981 -0.0154211 0.0310561" quat="0.961794 0.273112 -0.0169316 0.00866592" /> 
+                    <joint damping="0.55" name="robot0_wam_joint_2" range="-1.985 1.985" />
+                    <geom class="viz" mesh="robot0_shoulder_pitch_link_fine" />
+                    <geom class="col" mesh="robot0_shoulder_pitch_link_convex" />
+                    <body name="robot0_wam_link_3" pos="0 0 0" quat="0.707107 0.707107 0 0">
+                        <inertial diaginertia="0.0592718 0.0592207 0.00313419" mass="2.20228" pos="0.00683259 3.309e-005 0.392492" quat="0.647136 0.0170822 0.0143038 0.762049" />
+                        <joint damping="1.65" name="robot0_wam_joint_3" range="-2.8 2.8" />
+                        <geom class="viz" mesh="robot0_upper_arm_link_fine" />
+                        <geom class="col" mesh="robot0_upper_arm_link_convex_decomposition_p1" />
+                        <geom class="col" mesh="robot0_upper_arm_link_convex_decomposition_p2" />
+                        <body name="robot0_wam_link_4" pos="0.045 0 0.55" quat="0.707107 -0.707107 0 0">
+                            <inertial diaginertia="0.0151047 0.0148285 0.00275805" mass="0.500168" pos="-0.0400149 -0.142717 -0.00022942" quat="0.704281 0.706326 0.0180333 0.0690353" />
+                            <joint damping="0.88" name="robot0_wam_joint_4" range="-0.9 3.14159" />
+                            <geom class="viz" mesh="robot0_elbow_link_fine" />
+                            <geom class="col" mesh="robot0_elbow_link_convex" />
+                            <geom class="viz" euler="1.57 0 0" mesh="robot0_forearm_link_fine" pos="-.045 -0.0730 0" />
+                            <geom class="col" euler="1.57 0 0" mesh="robot0_forearm_link_convex_decomposition_p1" pos="-0.045 -0.0730 0" />
+                            <geom class="col" euler="1.57 0 0" mesh="robot0_forearm_link_convex_decomposition_p2" pos="-.045 -0.0730 0" />
+                            <body name="robot0_wam_link_5" pos="-0.045 -0.3 0" quat="0.707107 0.707107 0 0">
+                                <inertial diaginertia="0.000555168 0.00046317 0.000234072" mass="1.05376" pos="8.921e-005 0.00435824 -0.00511217" quat="0.630602 0.776093 0.00401969 -0.002372" /> 
+                                <joint damping="0.55" name="robot0_wam_joint_5" range="-4.55 1.25" />
+                                <geom class="viz" mesh="robot0_wrist_yaw_link_fine" />
+                                <geom class="col" mesh="robot0_wrist_yaw_link_convex_decomposition_p1" />
+                                <geom class="col" mesh="robot0_wrist_yaw_link_convex_decomposition_p2" />
+                                <body name="robot0_wam_link_6" pos="0 0 0" quat="0.707107 -0.707107 0 0">
+                                    <inertial diaginertia="0.000555168 0.00046317 0.000234072" mass="0.517974" pos="-0.00012262 -0.0246834 -0.0170319" quat="0.630602 0.776093 0.00401969 -0.002372" />
+                                    <joint damping="0.11" name="robot0_wam_joint_6" range="-1.5707 1.5707" />
+                                    <geom class="viz" mesh="robot0_wrist_pitch_link_fine" />
+                                    <geom class="col" mesh="robot0_wrist_pitch_link_convex_decomposition_p1" />
+                                    <geom class="col" mesh="robot0_wrist_pitch_link_convex_decomposition_p2" />
+                                    <geom class="col" mesh="robot0_wrist_pitch_link_convex_decomposition_p3" />
+                                    <body name="robot0_wam_link_7" pos="0 0 0" quat="0.707107 0.707107 0 0">
+                                        <inertial diaginertia="0.00020683 0.00010859 0.00010851" mass="0.0828613" pos="0 0 0.055" quat="0.707107 0 0 0.707107" />
+                                        <joint damping="0.11" name="robot0_wam_joint_7" range="-3 3" />
+                                        <geom class="viz" mesh="robot0_wrist_palm_link_fine" />
+                                        <geom class="col" mesh="robot0_wrist_palm_link_convex" />
+
+                                        <body name="robot0_right_hand" pos="0 0 0" quat="1 0 0 0">
+                                            
+                                            
+                                            
+                                            <site group="1" name="robot0_ee" pos="0 0 0" rgba="0 0 1 1" size="0.01 0.01 0.01" type="sphere" />
+                                            <site group="1" name="robot0_ee_x" pos="0 0 0" quat="0.707105 0.707108 0 0 " rgba="1 0 0 0" size="0.005 .1" type="cylinder" />
+                                            <site group="1" name="robot0_ee_z" pos="0 0 0" quat="0.707105 0 0 0.707108" rgba="0 0 1 0" size="0.005 .1" type="cylinder" />
+                                            <site group="1" name="robot0_ee_y" pos="0 0 0" quat="0.707105 0 0.707108 0 " rgba="0 1 0 0" size="0.005 .1" type="cylinder" />
+                                            
+
+                                            <camera fovy="120" mode="fixed" name="robot0_eye_in_hand" pos="0.08 0 0" quat="0 0 -1 0" />
+                                            
+                                        <body name="gripper0_right_gripper" pos="0 0 0">
+            <body childclass="wam/bhand" name="gripper0_wam/bhand/bhand_palm_link" pos="0 0 0.06" quat="0 0 0 1">
+                <inertial diaginertia="0.000224052 0.000210701 2.81212e-005" mass="0.50573" pos="-5.1098e-005 0.0050433 0.036671" quat="0.553098 0.439047 0.434456 0.559078" />
+                <geom class="wam/bhandViz" mesh="gripper0_bhand_palm_fine" />
+                <geom mesh="gripper0_bhand_palm_link_convex_decomposition_p1" name="gripper0_bhand_palm_collision" />
+                <geom mesh="gripper0_bhand_palm_link_convex_decomposition_p2" />
+                <geom mesh="gripper0_bhand_palm_link_convex_decomposition_p3" />
+                <geom mesh="gripper0_bhand_palm_link_convex_decomposition_p4" />
+
+                <site group="1" name="gripper0_ft_frame" pos="0 0 0" rgba="1 0 0 1" size="0.01 0.01 0.01" type="sphere" />
+
+                
+                <site group="1" name="gripper0_grip_site" pos="0 0 -0.1775" rgba="1 0 0 1" size="0.01 0.01 0.01" type="sphere" />
+                
+                <site group="1" name="gripper0_grip_site_cylinder" pos="0 0 0.1399" rgba="0 1 0 0.3" size="0.005 10" type="cylinder" />
+
+                <body name="gripper0_wam/bhand/index/prox_link" pos="-0.025 0 0.0415" quat="0.707107 0 0 -0.707107">
+                    <inertial diaginertia="7.77335e-005 7.66282e-005 4.83122e-006" mass="0.14109" pos="0.023133 0.00078642 0.00052792" quat="0.0160796 0.707269 -0.000766008 0.706762" />
+                    <joint axis="0 0 -1" damping="10.0" name="gripper0_wam/bhand/index/prox_joint" range="0 3.14159" />
+                    <geom class="wam/bhandViz" mesh="gripper0_bhand_finger_prox_link_fine" />
+                    <geom mesh="gripper0_bhand_finger_prox_link_convex_decomposition_p1" name="gripper0_bhand_index_prox_collision" />
+                    <geom mesh="gripper0_bhand_finger_prox_link_convex_decomposition_p2" />
+                    <geom mesh="gripper0_bhand_finger_prox_link_convex_decomposition_p3" />
+                    <body name="gripper0_wam/bhand/index/med_link" pos="0.05 0 0.0339" quat="0.707107 0.707107 0 0">
+                        <inertial diaginertia="7.77335e-005 7.66282e-005 4.83122e-006" mass="0.062139" pos="0.023133 0.00078642 0.00052792" quat="0.0160796 0.707269 -0.000766008 0.706762" />
+                        <joint damping="0.011" name="gripper0_wam/bhand/index/med_joint" range="0 2.44346" />
+                        <geom class="wam/bhandViz" mesh="gripper0_bhand_finger_med_link_fine" />
+                        <geom mesh="gripper0_bhand_finger_med_link_convex" name="gripper0_bhand_index_med_collision" />
+                        <body name="gripper0_wam/bhand/index/dist_link" pos="0.06994 0.003 0" quat="0.92388 0 0 0.382683">
+                            <inertial diaginertia="3.8434e-005 3.72753e-005 3.09987e-006" mass="0.041377" pos="0.022825 0.0010491 0.0004203" quat="0.508412 0.51165 0.489583 0.489939" />
+                            <joint damping="0.011" name="gripper0_wam/bhand/index/dist_joint" range="0 0.837758" />
+                            <geom class="wam/bhandViz" euler="0 0 -.84" mesh="gripper0_bhand_finger_dist_link_fine" />
+                            <geom euler="0 0 -.84" friction="5 5" mesh="gripper0_bhand_finger_dist_link_convex" name="gripper0_bhand_index_dist_collision" solimp="1 5 .01 .5 2" solref="-5 -1000" />
+                            <site euler="0 0 -.2" group="1" name="gripper0_index_grip_site" pos="0.04 0.006 0" rgba="1 0 0 1" size="0.018 0.001 0.007" type="box" />
+                            <site euler="0 0 0" group="1" name="gripper0_index_tip_site" pos="0.057 -0.004 -0.001" rgba="1 0 0 1" size="0.005 0.0065 0.007" type="box" />
+                        </body>
+                    </body>
+                </body>
+                <body name="gripper0_wam/bhand/middle/prox_link" pos="0.025 0 0.0415" quat="0.707107 0 0 -0.707107">
+                    <inertial diaginertia="7.77335e-005 7.66282e-005 4.83122e-006" mass="0.14109" pos="0.023133 0.00078642 0.00052792" quat="0.0160796 0.707269 -0.000766008 0.706762" />
+                    <joint damping="10.0" name="gripper0_wam/bhand/middle/prox_joint" range="0 3.14159" />
+                    <geom class="wam/bhandViz" mesh="gripper0_bhand_finger_prox_link_fine" />
+                    <geom mesh="gripper0_bhand_finger_prox_link_convex_decomposition_p1" name="gripper0_bhand_middle_prox_collision" />
+                    <geom mesh="gripper0_bhand_finger_prox_link_convex_decomposition_p2" />
+                    <geom mesh="gripper0_bhand_finger_prox_link_convex_decomposition_p3" />
+                    <body name="gripper0_wam/bhand/middle/med_link" pos="0.05 0 0.0339" quat="0.707107 0.707107 0 0">
+                        <inertial diaginertia="7.77335e-005 7.66282e-005 4.83122e-006" mass="0.062139" pos="0.023133 0.00078642 0.00052792" quat="0.0160796 0.707269 -0.000766008 0.706762" />
+                        <joint damping="0.011" name="gripper0_wam/bhand/middle/med_joint" range="0 2.44346" />
+                        <geom class="wam/bhandViz" mesh="gripper0_bhand_finger_med_link_fine" />
+                        <geom mesh="gripper0_bhand_finger_med_link_convex" name="gripper0_bhand_middle_med_collision" />
+                        <body name="gripper0_wam/bhand/middle/dist_link" pos="0.06994 0.003 0" quat="0.92388 0 0 0.382683">
+                            <inertial diaginertia="3.8434e-005 3.72753e-005 3.09987e-006" mass="0.041377" pos="0.022825 0.0010491 0.0004203" quat="0.508412 0.51165 0.489583 0.489939" />
+                            <joint damping="0.011" name="gripper0_wam/bhand/middle/dist_joint" range="0 0.837758" />
+                            <geom class="wam/bhandViz" euler="0 0 -.84" mesh="gripper0_bhand_finger_dist_link_fine" />
+                            <geom euler="0 0 -.84" friction="5 5" mesh="gripper0_bhand_finger_dist_link_convex" name="gripper0_bhand_middle_dist_collision" solimp="1 5 .01 .5 2" solref="-5 -1000" />
+                            <site euler="0 0 -.2" group="1" name="gripper0_middle_grip_site" pos="0.04 0.006 0" rgba="1 0 0 1" size="0.018 0.001 0.007" type="box" />
+                            <site euler="0 0 0" group="1" name="gripper0_middle_tip_site" pos="0.057 -0.004 -0.001" rgba="1 0 0 1" size="0.005 0.0065 0.007" type="box" />
+                        </body>
+                    </body>
+                </body>
+                <body name="gripper0_wam/bhand/thumb/med_link" pos="0 0.05 0.0754" quat="0.5 0.5 0.5 0.5">
+                    <inertial diaginertia="7.77335e-005 7.66282e-005 4.83122e-006" mass="0.062139" pos="0.023133 0.00078642 0.00052792" quat="0.0160796 0.707269 -0.000766008 0.706762" />
+                    <joint damping="0.011" name="gripper0_wam/bhand/thumb/med_joint" range="0 2.44346" />
+                    <geom class="wam/bhandViz" mesh="gripper0_bhand_finger_med_link_fine" />
+                    <geom mesh="gripper0_bhand_finger_med_link_convex" name="gripper0_bhand_thumb_med_collision" />
+                    <body name="gripper0_wam/bhand/thumb/dist_link" pos="0.06994 0.003 0" quat="0.92388 0 0 0.382683">
+                        <inertial diaginertia="3.8434e-005 3.72753e-005 3.09987e-006" mass="0.041377" pos="0.022825 0.0010491 0.0004203" quat="0.508412 0.51165 0.489583 0.489939" />
+                        <joint damping="0.011" name="gripper0_wam/bhand/thumb/dist_joint" range="0 0.837758" />
+                        <geom class="wam/bhandViz" euler="0 0 -.84" mesh="gripper0_bhand_finger_dist_link_fine" />
+                        <geom euler="0 0 -.84" friction="5 5" mesh="gripper0_bhand_finger_dist_link_convex" name="gripper0_bhand_thumb_dist_collision" solimp="1 5 .01 .5 2" solref="-5 -1000" />
+                        <site euler="0 0 -.2" group="1" name="gripper0_thumb_grip_site" pos="0.04 0.006 0" rgba="1 0 0 1" size="0.018 0.001 0.007" type="box" />
+                        <site euler="0 0 0" group="1" name="gripper0_thumb_tip_site" pos="0.057 -0.004 -0.001" rgba="1 0 0 1" size="0.005 0.0065 0.007" type="box" />
+                    </body>
+                </body>
+            </body>
+        </body>
+    </body>    
+                                    </body>
+                                </body>
+                            </body>
+                        </body>
+                    </body>
+                </body>
+            </body>
+        </body>
+    <body name="Milk0" pos="0.011570125831279754 -0.2550482449193978 0.885" quat="0.975168633435045 0.0 0.0 0.22146362311771817">
+        <geom condim="4" density="100" friction="0.95 0.3 0.1" group="1" material="ceramic" mesh="milk_mesh" name="Milk0" pos="0 0 0" solimp="0.998 0.998 0.001" solref="0.001 1" type="mesh" />
+      <site name="Milk0" pos="0 0 0" rgba="1 0 0 0" size="0.002 0.002 0.002" type="sphere" /><joint damping="0.0005" name="Milk0_jnt0" type="free" /></body>
+      <body name="Bread0" pos="0.10307962397949066 -0.395916311111589 0.8450000000000001" quat="-0.03727071528156416 0.0 0.0 0.9993052055215166">
+        <geom condim="4" density="50" friction="0.95 0.3 0.1" group="1" material="bread" mesh="bread_mesh" name="Bread0" pos="0 0 0" solimp="0.998 0.998 0.001" solref="0.001 1" type="mesh" />
+      <site name="Bread0" pos="0 0 0" rgba="1 0 0 0" size="0.002 0.002 0.002" type="sphere" /><joint damping="0.0005" name="Bread0_jnt0" type="free" /></body>
+      <body name="Cereal0" pos="0.057388065249775314 -0.28659280179399865 0.8500000000000001" quat="-0.0559160274171772 0.0 0.0 0.9984354750698121">
+        <geom condim="4" density="150" friction="0.95 0.3 0.1" group="1" material="cereal" mesh="cereal_mesh" name="Cereal0" pos="0 0 0" solimp="0.998 0.998 0.001" solref="0.001 1" type="mesh" />
+      <site name="Cereal0" pos="0 0 0" rgba="1 0 0 0" size="0.002 0.002 0.002" type="sphere" /><joint damping="0.0005" name="Cereal0_jnt0" type="free" /></body>
+      <body name="Can0" pos="0.168520510392403 -0.25084402276409934 0.8600000000000001" quat="0.9067411647802215 0.0 0.0 0.42168763331761017">
+        <geom condim="4" density="100" friction="0.95 0.3 0.1" group="1" material="coke" mesh="can_mesh" name="Can0" pos="0 0 0" solimp="0.998 0.998 0.001" solref="0.001 1" type="mesh" />
+      <site name="Can0" pos="0 0 0" rgba="1 0 0 0" size="0.002 0.002 0.002" type="sphere" /><joint damping="0.0005" name="Can0_jnt0" type="free" /></body>
+      <body name="VisualMilk0" pos="0.0025000000000000022 0.15750000000000003 0.885" quat="1.0 0.0 0.0 0.0">
+        <geom conaffinity="0" contype="0" group="0" mass="0.0001" mesh="milk_mesh" pos="0 0 0" rgba="0.8 0.8 0.8 0.3" type="mesh" />
+        <geom conaffinity="0" contype="0" group="1" mass="0.0001" mesh="milk_mesh" pos="0 0 0" rgba="0.8 0.8 0.8 0.3" type="mesh" />
+      </body>
+      <body name="VisualBread0" pos="0.1975 0.15750000000000003 0.8450000000000001" quat="1.0 0.0 0.0 0.0">
+        <geom conaffinity="0" contype="0" group="0" mass="0.0001" mesh="bread_mesh" pos="0 0 0" rgba="0.8 0.8 0.8 0.3" type="mesh" />
+        <geom conaffinity="0" contype="0" group="1" mass="0.0001" mesh="bread_mesh" pos="0 0 0" rgba="0.8 0.8 0.8 0.3" type="mesh" />
+      </body>
+      <body name="VisualCereal0" pos="0.0025000000000000022 0.4025000000000001 0.8500000000000001" quat="1.0 0.0 0.0 0.0">
+        <geom conaffinity="0" contype="0" group="0" mass="0.0001" mesh="cereal_mesh" pos="0 0 0" rgba="0.8 0.8 0.8 0.3" type="mesh" />
+        <geom conaffinity="0" contype="0" group="1" mass="0.0001" mesh="cereal_mesh" pos="0 0 0" rgba="0.8 0.8 0.8 0.3" type="mesh" />
+      </body>
+      <body name="VisualCan0" pos="0.1975 0.4025000000000001 0.8600000000000001" quat="1.0 0.0 0.0 0.0">
+        <geom conaffinity="0" contype="0" group="0" mass="0.0001" mesh="can_mesh" pos="0 0 0" rgba="0.8 0.8 0.8 0.3" type="mesh" />
+        <geom conaffinity="0" contype="0" group="1" mass="0.0001" mesh="can_mesh" pos="0 0 0" rgba="0.8 0.8 0.8 0.3" type="mesh" />
+      </body>
+      </worldbody>
+
+  <equality>
+  </equality>
+<sensor><touch name="gripper0_index_grip_force" site="gripper0_index_grip_site" />
+        <touch name="gripper0_index_tip_force" site="gripper0_index_tip_site" />
+        <touch name="gripper0_middle_grip_force" site="gripper0_middle_grip_site" />
+        <touch name="gripper0_middle_tip_force" site="gripper0_middle_tip_site" />
+        <touch name="gripper0_thumb_grip_force" site="gripper0_thumb_grip_site" />
+        <touch name="gripper0_thumb_tip_force" site="gripper0_thumb_tip_site" />
+        <force name="gripper0_force_ee" site="gripper0_ft_frame" />
+        <torque name="gripper0_torque_ee" site="gripper0_ft_frame" />
+    </sensor><tendon /><contact /><default><default class="wam">
+            <joint armature="1" axis="0 0 1" damping="50" frictionloss="0.2" limited="true" pos="0 0 0" stiffness="0" type="hinge" />
+            
+            <default class="viz">
+                <geom conaffinity="0" contype="0" group="1" rgba="0.7 0.7 0.7 1" type="mesh" />
+            </default>
+
+            <default class="col">
+                <geom conaffinity="1" contype="0" group="0" rgba="0.5 0.6 0.7 1" type="mesh" />
+            </default>
+        </default>
+    <default class="wam/bhand">
+            <geom conaffinity="1" contype="1" friction="1 0.5 0.01" group="0" rgba="0.5 0.6 0.7 1" solref="0.01 0.25" type="mesh" />
+            <joint axis="0 0 1" damping="0.011" frictionloss=".001" limited="true" pos="0 0 0" type="hinge" />
+        </default>
+        
+        <default class="wam/bhandViz">
+            <geom conaffinity="0" contype="0" group="1" rgba="0.7 0.8 0.8 1" type="mesh" />
+        </default>
+    </default></mujoco>

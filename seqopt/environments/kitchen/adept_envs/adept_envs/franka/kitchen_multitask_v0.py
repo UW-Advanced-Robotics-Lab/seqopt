@@ -35,7 +35,7 @@ class KitchenV0(robot_env.RobotEnv):
         os.path.dirname(__file__),
         '../franka/assets/franka_kitchen_jntpos_act_ab.xml')
     N_DOF_ROBOT = 9
-    N_DOF_OBJECT = 1
+    N_DOF_OBJECT = 14
 
     def __init__(self, robot_params={}, frame_skip=40):
         self.goal_concat = True
@@ -60,14 +60,14 @@ class KitchenV0(robot_env.RobotEnv):
         self.init_qpos = self.sim.model.key_qpos[0].copy()
 
         # For the microwave kettle slide hinge
-        self.init_qpos = np.array([ 1.48388023e-01, -1.76848573e+00,  1.84390296e+00, -2.47685760e+00,
-                                    2.60252026e-01,  7.12533105e-01,  1.59515394e+00,  4.79267505e-02,
-                                    3.71350919e-02, -2.66279850e-04, -5.18043486e-05,  3.12877220e-05,
-                                   -4.51199853e-05, -3.90842156e-06, -4.22629655e-05,  6.28065475e-05,
-                                    4.04984708e-05,  4.62730939e-04, -2.26906415e-04, -4.65501369e-04,
-                                   -6.44129196e-03, -1.77048263e-03,  1.08009684e-03, -2.69397440e-01,
-                                    3.50383255e-01,  1.61944683e+00,  1.00618764e+00,  4.06395120e-03,
-                                   -6.62095997e-03, -2.68278933e-04])
+        # self.init_qpos = np.array([ 1.48388023e-01, -1.76848573e+00,  1.84390296e+00, -2.47685760e+00,
+        #                             2.60252026e-01,  7.12533105e-01,  1.59515394e+00,  4.79267505e-02,
+        #                             3.71350919e-02, -2.66279850e-04, -5.18043486e-05,  3.12877220e-05,
+        #                            -4.51199853e-05, -3.90842156e-06, -4.22629655e-05,  6.28065475e-05,
+        #                             4.04984708e-05,  4.62730939e-04, -2.26906415e-04, -4.65501369e-04,
+        #                            -6.44129196e-03, -1.77048263e-03,  1.08009684e-03, -2.69397440e-01,
+        #                             3.50383255e-01,  1.61944683e+00,  1.00618764e+00,  4.06395120e-03,
+        #                            -6.62095997e-03, -2.68278933e-04])
 
         self.init_qvel = self.sim.model.key_qvel[0].copy()
 
@@ -100,7 +100,7 @@ class KitchenV0(robot_env.RobotEnv):
                                                              right_finger_geomadr + right_finger_ngeoms)]
         self.ids['geoms'] = dict()
         self.ids['geoms'].update({
-            'slide_handle': self.sim.model.name2id('slide_handle', 'geom'),
+            'handle': self.sim.model.name2id('knob_1_handle', 'geom'),
             'left_finger_col': set(left_finger_geoms),
             'right_finger_col': set(right_finger_geoms)
         })
@@ -114,7 +114,7 @@ class KitchenV0(robot_env.RobotEnv):
         # Add joints
         self.ids['joints'] = dict()
         self.ids['joints'].update({
-            'slide': self.sim.model.name2id('slidedoor_joint', 'joint'),
+            'hinge': self.sim.model.name2id('knob_Joint_1', 'joint'),
             'left_finger': self.sim.model.name2id('panda0_finger_joint1', 'joint'),
             'right_finger': self.sim.model.name2id('panda0_finger_joint2', 'joint')
         })
@@ -160,32 +160,31 @@ class KitchenV0(robot_env.RobotEnv):
             self, robot_noise_ratio=self.robot_noise_ratio)
 
         # (Somesh) Custom observations
-        handle_pos = self.sim.data.geom_xpos[self.ids['geoms']['slide_handle']]
+        handle_pos = self.sim.data.geom_xpos[self.ids['geoms']['handle']]
         fingertip_dist = self.sim.data.qpos[self.ids['joints']['left_finger']] +\
                          self.sim.data.qpos[self.ids['joints']['right_finger']]
         grip_pos = self.sim.data.site_xpos[self.ids['sites']['end_effector']]
         reach_dist = np.linalg.norm(handle_pos - grip_pos)
-        slide_dist = np.abs(self.sim.model.jnt_range[self.ids['joints']['slide']][1] -
-                            self.sim.data.qpos[self.ids['joints']['slide']])
+
+        slide_dist = np.abs(self.sim.data.qpos[self.ids['joints']['hinge']] -
+                            self.sim.model.jnt_range[self.ids['joints']['hinge']][0])
+        # slide_dist = np.abs(self.sim.model.jnt_range[self.ids['joints']['hinge']][1] -
+        #                     self.sim.data.qpos[self.ids['joints']['hinge']])
+
         # Determine if the handle is grasped
         # Conditions that need to be met:
         #   1. Both left and right fingers are in contact with the handle
-        #   2. x position of handle should be (somewhere) in between x positions of the contact locations (to ensure
-        #      the fingers grab on either side of the handle)
-        #   3. The grasp site should fall within the cross-sectional area of the handle
+        #   2. The fingers should be distributed around the handle, more than 135 degrees apart
         left_finger_contact_pos = None
         right_finger_contact_pos = None
-        # print(f"Geoms IDS: Handle: {self.ids['geoms']['slide_handle']}, "
-        #       f"Left Finger: {self.ids['geoms']['left_finger_col']}, "
-        #       f"Right Finger: {self.ids['geoms']['right_finger_col']}")
-        # print(f"Contacts: {[(c.geom1, c.geom2) for c in self.sim.data.contact]}")
+
         for contact in self.sim.data.contact:
             # If we have already determined contact locations for both fingers, stop searching
             if left_finger_contact_pos is not None and right_finger_contact_pos is not None:
                 break
 
             # Check if the door handle is involved in the contact
-            if self.ids['geoms']['slide_handle'] in [contact.geom1, contact.geom2]:
+            if self.ids['geoms']['handle'] in [contact.geom1, contact.geom2]:
 
                 # Convert contact geoms to a set (since elements are guaranteed to be unique)
                 contact_set = {contact.geom1, contact.geom2}
@@ -194,45 +193,31 @@ class KitchenV0(robot_env.RobotEnv):
                 if left_finger_contact_pos is None and \
                     len(self.ids['geoms']['left_finger_col'].intersection(contact_set)) > 0:
                     left_finger_contact_pos = contact.pos.copy()
-                    # print(f"Handle pos: {self.sim.data.geom_xpos[self.ids['geoms']['slide_handle']]}")
-                    # print(f"Left finger pos: {left_finger_contact_pos}")
 
                 # Check if the right finger was involved in the contact
                 if right_finger_contact_pos is None and \
                     len(self.ids['geoms']['right_finger_col'].intersection(contact_set)) > 0:
                     right_finger_contact_pos = contact.pos.copy()
-                    # print(f"Right finger pos: {right_finger_contact_pos}")
 
+        # Check if both fingers are touching. If they are, check the angular difference in
+        # their distribution around the handle/object of interest
         if left_finger_contact_pos is not None and right_finger_contact_pos is not None:
-            # print(f"Contact Positions - Left Finger: {left_finger_contact_pos}, "
-            #       f"Right Finger: {right_finger_contact_pos} \n"
-            #       f"Handle Position - {self.sim.data.geom_xpos[self.ids['geoms']['slide_handle']]}")
-            handle_pos = self.sim.data.geom_xpos[self.ids['geoms']['slide_handle']]
+            handle_pos = self.sim.data.geom_xpos[self.ids['geoms']['handle']]
+            left_touch_pos = (left_finger_contact_pos - handle_pos)[:2]
+            right_touch_pos = (right_finger_contact_pos - handle_pos)[:2]
+            angle_diff = np.arctan2(*left_touch_pos[::-1]) - np.arctan2(*right_touch_pos[::-1])
 
-            # Get the distance of the grasp site from the handle in the x-y plane
-            radial_dist = np.linalg.norm(grip_pos[:2] - handle_pos[:2])
+            while angle_diff <= -np.pi:
+                angle_diff += 2 * np.pi
+            while angle_diff > np.pi:
+                angle_diff -= 2 * np.pi
 
-            # If the grasp site is within the area of the handle (along with both fingers making
-            # contact with the handle), consider the handle grasped
-            if radial_dist <= 0.022:
+            if np.abs(angle_diff) >= np.deg2rad(135):
                 grasped = np.float32(1.0)
-                # print(f"GRASPED!!!!!!!!!!!!!!!!!")
             else:
-                grasped = np.float(0.0)
-
-            # Get the mean x value of the contacts
-            # contact_mean_x = .5 * (left_finger_contact_pos[0] + right_finger_contact_pos[0])
-            # Get the x value of the center of the door handle
-            # handle_x = handle_pos[0]
-            # If the mean x value is within half the radius of the center of the handle, we consider it gripped
-            # if np.abs(handle_x - contact_mean_x) <= 0.011:
-            #     grasped = np.float32(1.0)
-            #     # print("Grasped!")
-            # else:
-            #     grasped = np.float32(0.0)
+                grasped = np.float32(0.0)
         else:
             grasped = np.float32(0.0)
-        # print('---')
 
         self.obs_dict = {}
         self.obs_dict['t'] = t
@@ -248,7 +233,9 @@ class KitchenV0(robot_env.RobotEnv):
         self.obs_dict['reach_dist'] = reach_dist
 
         if self.goal_concat:
-            return np.concatenate([self.obs_dict['qp'], self.obs_dict['obj_qp'],
+            return np.concatenate([self.obs_dict['qp'],
+                                   self.obs_dict['qv'],
+                                   self.obs_dict['obj_qp'],
                                    self.obs_dict['handle_pos'],
                                    np.expand_dims(self.obs_dict['fingertip_dist'], 0),
                                    np.expand_dims(self.obs_dict['grasped'], 0),

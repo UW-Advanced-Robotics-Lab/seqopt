@@ -38,7 +38,7 @@
             <geom type="cylinder" pos="0 0 .013" size=".05 .008"/>
             <geom type="cylinder" pos="0 0.048 .037" size=".014 .018" rgba="1 0 0 1"/>
 
-            <geom class="oven_collision" type="box" pos="0 0 .038" size=".014 .048 .018" mass=".01"/>
+            <geom name="knob_1_handle" class="oven_collision" type="box" pos="0 0 .038" size=".014 .048 .018" mass=".01"/>
             <geom class="oven_collision" type="cylinder" pos="0 0 .013" size=".05 .008" mass=".01"/>
             <site type="sphere" name="knob1_site" pos="0 0 .038" size=".01" group="3" rgba="1 1 0 1"/>
         </body>

@@ -1,0 +1,6 @@
+[submodule "robosuite/devices/SenseGlove-API"]
+	path = robosuite/devices/SenseGlove-API
+	url = https://github.com/Adjuvo/SenseGlove-API.git
+[submodule "robosuite/vr/triad_openvr"]
+	path = robosuite/vr/triad_openvr
+	url = https://github.com/TriadSemi/triad_openvr.git

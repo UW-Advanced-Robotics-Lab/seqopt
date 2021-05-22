@@ -31,8 +31,6 @@ from dm_control.utils import rewards
 from dm_control.utils import xml_tools
 from dm_control.utils import io as resources
 
-from seqopt.utils.manipulator_utils import scaled_dist, _REACH_CLOSE, _GRASP_CLOSE
-
 from lxml import etree
 import numpy as np
 
@@ -47,6 +45,8 @@ _ARM_JOINTS = ['arm_root', 'arm_shoulder', 'arm_elbow', 'arm_wrist',
 _ALL_PROPS = frozenset(['ball', 'target_ball', 'cup',
                         'block', 'target_block',
                         'peg', 'target_peg', 'slot'])
+_REACH_CLOSE = 0.015
+_GRASP_CLOSE = 0.0375
 
 SUITE = containers.TaggedTasks()
 
@@ -369,18 +369,7 @@ class Bring(base.Task):
 
   def _ball_reward(self, physics):
     """Returns a reward for bringing the ball prop to the target."""
-    # reach_dist = physics.site_distance('grasp', 'ball')
-    # grasp_dist = physics.site_distance('fingertip_touch', 'thumbtip_touch')
-    # grasp_success = (reach_dist <= _REACH_CLOSE and
-    #                  grasp_dist <= _GRASP_CLOSE)
-    # grasp_reward = 1.0 if grasp_success else 0.0
-    # place_dist = physics.site_distance('ball', 'target_ball')
-    #
-    # reward = scaled_dist(reach_dist) + grasp_reward + scaled_dist(place_dist)
-    
     return self._is_close(physics.site_distance('ball', 'target_ball'))
-
-    return reward
 
   def _block_reward(self, physics):
     """Returns a reward for bringing the ball prop to the target."""

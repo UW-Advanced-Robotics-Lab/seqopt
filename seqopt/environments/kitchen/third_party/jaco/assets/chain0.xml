@@ -1,0 +1,4 @@
+<mujoco model="jaco_arm">
+  <include file="../robot.xml"/>
+  <include file="../jaco_three_finger_gripper.xml"/>
+</mujoco>

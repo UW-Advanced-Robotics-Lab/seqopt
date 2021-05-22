@@ -1,0 +1,26 @@
+# required for IK controllers
+pybullet==2.6.9
+
+# required for GymWrapper
+gym
+
+# Mac OS X only
+hidapi
+
+# required for demonstration utils
+h5py
+
+# required for pygame renderer
+pygame
+
+# required for senseglove python bindings
+cppyy==1.7.0
+cppyy-backend==1.11.0
+cppyy-cling==6.20.4.0
+CPyCppyy==1.10.3
+
+# required for calibration utils
+PyYAML==5.3.1
+
+# required for VR
+openvr==1.14.1501

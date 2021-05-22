@@ -1,0 +1,145 @@
+<!-- ======================================================
+	This file is part of MuJoCo.     
+	Copyright 2009-2015 Roboti LLC.
+	
+	Model 		:: Barrett hand from Barrett technologies
+		Source		: https://github.com/jhu-lcsr/barrett_model
+		Downloaded	: 10Oct'15
+		
+	Mujoco		:: Advanced physics simulation engine
+		Source		: www.roboti.us
+		Version		: 1.22
+		Released 	: 26Nov15
+		
+	Author		:: Vikash Kumar
+		Contacts 	: kumar@roboti.us
+		Last edits 	: 26Dec'15
+====================================================== -->
+
+<mujoco model="barrett_hand">
+    <default>
+        <default class="wam/bhand">
+            <geom type="mesh" contype="1" conaffinity="1" group="0" rgba="0.5 0.6 0.7 1" solref="0.01 0.25" friction="1 0.5 0.01"/>
+            <joint type="hinge" damping="0.011" limited="true" pos="0 0 0" axis="0 0 1" frictionloss=".001"/>
+        </default>
+        
+        <default class="wam/bhandViz">
+            <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.7 0.8 0.8 1"/>
+        </default>
+    </default>
+
+    <asset>
+        <mesh name="bhand_palm_fine" file="meshes/wam_barrett_gripper/bhand_palm_fine.stl"/>
+        <mesh name="bhand_palm_link_convex_decomposition_p1" file="meshes/wam_barrett_gripper/bhand_palm_link_convex_decomposition_p1.stl"/>
+        <mesh name="bhand_palm_link_convex_decomposition_p2" file="meshes/wam_barrett_gripper/bhand_palm_link_convex_decomposition_p2.stl"/>
+        <mesh name="bhand_palm_link_convex_decomposition_p3" file="meshes/wam_barrett_gripper/bhand_palm_link_convex_decomposition_p3.stl"/>
+        <mesh name="bhand_palm_link_convex_decomposition_p4" file="meshes/wam_barrett_gripper/bhand_palm_link_convex_decomposition_p4.stl"/>
+        <mesh name="bhand_finger_prox_link_fine" file="meshes/wam_barrett_gripper/bhand_finger_prox_link_fine.stl"/>
+        <mesh name="bhand_finger_prox_link_convex_decomposition_p1" file="meshes/wam_barrett_gripper/bhand_finger_prox_link_convex_decomposition_p1.stl"/>
+        <mesh name="bhand_finger_prox_link_convex_decomposition_p2" file="meshes/wam_barrett_gripper/bhand_finger_prox_link_convex_decomposition_p2.stl"/>
+        <mesh name="bhand_finger_prox_link_convex_decomposition_p3" file="meshes/wam_barrett_gripper/bhand_finger_prox_link_convex_decomposition_p3.stl"/>
+        <mesh name="bhand_finger_med_link_fine" file="meshes/wam_barrett_gripper/bhand_finger_med_link_fine.stl"/>
+        <mesh name="bhand_finger_med_link_convex" file="meshes/wam_barrett_gripper/bhand_finger_med_link_convex.stl"/>
+        <mesh name="bhand_finger_dist_link_fine" file="meshes/wam_barrett_gripper/bhand_finger_dist_link_fine.stl"/>
+        <mesh name="bhand_finger_dist_link_convex" file="meshes/wam_barrett_gripper/bhand_finger_dist_link_convex.stl"/>
+    </asset>
+
+    <actuator>
+        <position ctrllimited="true" ctrlrange="0 2.0" forcelimited="true" forcerange="-1.0 1.0" joint="wam/bhand/index/med_joint" kp="10" name="index_med" user="1"></position>
+        <position ctrllimited="true" ctrlrange="0 0.83" forcelimited="true" forcerange="-1.0 1.0" joint="wam/bhand/index/dist_joint" kp="10" name="index_dist" user="1"></position>
+        <position ctrllimited="true" ctrlrange="0 2.0" forcelimited="true" forcerange="-1.0 1.0" joint="wam/bhand/middle/med_joint" kp="10" name="middle_med" user="1"></position>
+        <position ctrllimited="true" ctrlrange="0 0.83" forcelimited="true" forcerange="-0.5 0.5" joint="wam/bhand/middle/dist_joint" kp="5" name="middle_dist" user="1"></position>
+        <position ctrllimited="true" ctrlrange="0 2.0" forcelimited="true" forcerange="-0.5 0.5" joint="wam/bhand/thumb/med_joint" kp="5" name="thumb_med" user="1"></position>
+        <position ctrllimited="true" ctrlrange="0 0.83" forcelimited="true" forcerange="-0.5 0.5" joint="wam/bhand/thumb/dist_joint" kp="5" name="thumb_dist" user="1"></position>
+    </actuator>
+
+    <worldbody>
+        <body name="right_gripper" pos="0 0 0">
+            <body name="wam/bhand/bhand_palm_link" childclass="wam/bhand" pos="0 0 0.06" quat="0 0 0 1">
+                <inertial pos="-5.1098e-005 0.0050433 0.036671" quat="0.553098 0.439047 0.434456 0.559078" mass="0.50573" diaginertia="0.000224052 0.000210701 2.81212e-005" />
+                <geom class="wam/bhandViz" mesh="bhand_palm_fine"/>
+                <geom name="bhand_palm_collision" mesh="bhand_palm_link_convex_decomposition_p1"/>
+                <geom mesh="bhand_palm_link_convex_decomposition_p2"/>
+                <geom mesh="bhand_palm_link_convex_decomposition_p3"/>
+                <geom mesh="bhand_palm_link_convex_decomposition_p4"/>
+
+                <site name="ft_frame" pos="0 0 0" size="0.01 0.01 0.01" rgba="1 0 0 1" type="sphere" group="1" />
+
+                <!-- This site was added for visualization. -->
+                <site name="grip_site" pos="0 0 -0.1775" size="0.01 0.01 0.01" rgba="1 0 0 1" type="sphere" group="1"/>
+                <!-- This site was added for visualization. -->
+                <site name="grip_site_cylinder" pos="0 0 0.1399" size="0.005 10" rgba="0 1 0 0.3" type="cylinder" group="1"/>
+
+                <body name="wam/bhand/index/prox_link" pos="-0.025 0 0.0415" quat="0.707107 0 0 -0.707107">
+                    <inertial pos="0.023133 0.00078642 0.00052792" quat="0.0160796 0.707269 -0.000766008 0.706762" mass="0.14109" diaginertia="7.77335e-005 7.66282e-005 4.83122e-006" />
+                    <joint name="wam/bhand/index/prox_joint" axis="0 0 -1" range="0 3.14159" damping="10.0"/>
+                    <geom class="wam/bhandViz" mesh="bhand_finger_prox_link_fine"/>
+                    <geom name="bhand_index_prox_collision" mesh="bhand_finger_prox_link_convex_decomposition_p1"/>
+                    <geom mesh="bhand_finger_prox_link_convex_decomposition_p2"/>
+                    <geom mesh="bhand_finger_prox_link_convex_decomposition_p3"/>
+                    <body name="wam/bhand/index/med_link" pos="0.05 0 0.0339" quat="0.707107 0.707107 0 0">
+                        <inertial pos="0.023133 0.00078642 0.00052792" quat="0.0160796 0.707269 -0.000766008 0.706762" mass="0.062139" diaginertia="7.77335e-005 7.66282e-005 4.83122e-006" />
+                        <joint name="wam/bhand/index/med_joint" range="0 2.44346" damping="0.011"/>
+                        <geom class="wam/bhandViz" mesh="bhand_finger_med_link_fine"/>
+                        <geom name="bhand_index_med_collision" mesh="bhand_finger_med_link_convex"/>
+                        <body name="wam/bhand/index/dist_link" pos="0.06994 0.003 0" quat="0.92388 0 0 0.382683">
+                            <inertial pos="0.022825 0.0010491 0.0004203" quat="0.508412 0.51165 0.489583 0.489939" mass="0.041377" diaginertia="3.8434e-005 3.72753e-005 3.09987e-006" />
+                            <joint name="wam/bhand/index/dist_joint" range="0 0.837758" damping="0.011"/>
+                            <geom class="wam/bhandViz" mesh="bhand_finger_dist_link_fine" euler="0 0 -.84"/>
+                            <geom name="bhand_index_dist_collision" mesh="bhand_finger_dist_link_convex" euler="0 0 -.84" solimp="1 5 .01 .5 2" solref="-5 -1000" friction="5 5"/>
+                            <site name="index_grip_site" pos="0.04 0.006 0" euler="0 0 -.2" size="0.018 0.001 0.007" rgba="1 0 0 1" type="box" group="1"/>
+                            <site name="index_tip_site" pos="0.057 -0.004 -0.001" euler="0 0 0" size="0.005 0.0065 0.007" rgba="1 0 0 1" type="box" group="1"/>
+                        </body>
+                    </body>
+                </body>
+                <body name="wam/bhand/middle/prox_link" pos="0.025 0 0.0415" quat="0.707107 0 0 -0.707107">
+                    <inertial pos="0.023133 0.00078642 0.00052792" quat="0.0160796 0.707269 -0.000766008 0.706762" mass="0.14109" diaginertia="7.77335e-005 7.66282e-005 4.83122e-006" />
+                    <joint name="wam/bhand/middle/prox_joint" range="0 3.14159" damping="10.0"/>
+                    <geom class="wam/bhandViz" mesh="bhand_finger_prox_link_fine"/>
+                    <geom name="bhand_middle_prox_collision" mesh="bhand_finger_prox_link_convex_decomposition_p1"/>
+                    <geom mesh="bhand_finger_prox_link_convex_decomposition_p2"/>
+                    <geom mesh="bhand_finger_prox_link_convex_decomposition_p3"/>
+                    <body name="wam/bhand/middle/med_link" pos="0.05 0 0.0339" quat="0.707107 0.707107 0 0">
+                        <inertial pos="0.023133 0.00078642 0.00052792" quat="0.0160796 0.707269 -0.000766008 0.706762" mass="0.062139" diaginertia="7.77335e-005 7.66282e-005 4.83122e-006" />
+                        <joint name="wam/bhand/middle/med_joint" range="0 2.44346" damping="0.011"/>
+                        <geom class="wam/bhandViz" mesh="bhand_finger_med_link_fine"/>
+                        <geom name="bhand_middle_med_collision" mesh="bhand_finger_med_link_convex"/>
+                        <body name="wam/bhand/middle/dist_link" pos="0.06994 0.003 0" quat="0.92388 0 0 0.382683">
+                            <inertial pos="0.022825 0.0010491 0.0004203" quat="0.508412 0.51165 0.489583 0.489939" mass="0.041377" diaginertia="3.8434e-005 3.72753e-005 3.09987e-006" />
+                            <joint name="wam/bhand/middle/dist_joint" range="0 0.837758" damping="0.011"/>
+                            <geom class="wam/bhandViz" mesh="bhand_finger_dist_link_fine" euler="0 0 -.84"/>
+                            <geom name="bhand_middle_dist_collision" mesh="bhand_finger_dist_link_convex" euler="0 0 -.84" solimp="1 5 .01 .5 2" solref="-5 -1000" friction="5 5"/>
+                            <site name="middle_grip_site" pos="0.04 0.006 0" euler="0 0 -.2" size="0.018 0.001 0.007" rgba="1 0 0 1" type="box" group="1"/>
+                            <site name="middle_tip_site" pos="0.057 -0.004 -0.001" euler="0 0 0" size="0.005 0.0065 0.007" rgba="1 0 0 1" type="box" group="1"/>
+                        </body>
+                    </body>
+                </body>
+                <body name="wam/bhand/thumb/med_link" pos="0 0.05 0.0754" quat="0.5 0.5 0.5 0.5">
+                    <inertial pos="0.023133 0.00078642 0.00052792" quat="0.0160796 0.707269 -0.000766008 0.706762" mass="0.062139" diaginertia="7.77335e-005 7.66282e-005 4.83122e-006" />
+                    <joint name="wam/bhand/thumb/med_joint" range="0 2.44346" damping="0.011"/>
+                    <geom class="wam/bhandViz" mesh="bhand_finger_med_link_fine"/>
+                    <geom name="bhand_thumb_med_collision" mesh="bhand_finger_med_link_convex"/>
+                    <body name="wam/bhand/thumb/dist_link" pos="0.06994 0.003 0" quat="0.92388 0 0 0.382683">
+                        <inertial pos="0.022825 0.0010491 0.0004203" quat="0.508412 0.51165 0.489583 0.489939" mass="0.041377" diaginertia="3.8434e-005 3.72753e-005 3.09987e-006" />
+                        <joint name="wam/bhand/thumb/dist_joint" range="0 0.837758" damping="0.011"/>
+                        <geom class="wam/bhandViz" mesh="bhand_finger_dist_link_fine" euler="0 0 -.84"/>
+                        <geom name="bhand_thumb_dist_collision" mesh="bhand_finger_dist_link_convex" euler="0 0 -.84" solimp="1 5 .01 .5 2" solref="-5 -1000" friction="5 5"/>
+                        <site name="thumb_grip_site" pos="0.04 0.006 0" euler="0 0 -.2" size="0.018 0.001 0.007" rgba="1 0 0 1" type="box" group="1"/>
+                        <site name="thumb_tip_site" pos="0.057 -0.004 -0.001" euler="0 0 0" size="0.005 0.0065 0.007" rgba="1 0 0 1" type="box" group="1"/>
+                    </body>
+                </body>
+            </body>
+        </body>
+    </worldbody>
+    
+    <sensor>
+        <touch name="index_grip_force" site="index_grip_site"/>
+        <touch name="index_tip_force" site="index_tip_site"/>
+        <touch name="middle_grip_force" site="middle_grip_site"/>
+        <touch name="middle_tip_force" site="middle_tip_site"/>
+        <touch name="thumb_grip_force" site="thumb_grip_site"/>
+        <touch name="thumb_tip_force" site="thumb_tip_site"/>
+        <force name="force_ee" site="ft_frame"/>
+        <torque name="torque_ee" site="ft_frame"/>
+    </sensor>
+</mujoco>

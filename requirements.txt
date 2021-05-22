@@ -8,7 +8,7 @@ cloudpickle==1.6.0
 cycler==0.10.0
 Cython==0.29.21
 dataclasses==0.8
-dm-control==0.0.322773188
+dm-control==0.0.355168290
 dm-env==1.3
 dm-tree==0.1.5
 dmc2gym @ git+git://github.com/denisyarats/dmc2gym.git@62ca3d886eb59a1927720d036be210bedc6d9f48

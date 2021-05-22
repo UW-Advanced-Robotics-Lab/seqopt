@@ -1,0 +1,173 @@
+<!-- ======================================================
+	This file is part of MuJoCo.     
+	Copyright 2009-2016 Roboti LLC.
+	
+	Model 		:: WAM Arm from Barrett technologies
+		Source		: https://github.com/jhu-lcsr/barrett_model
+		Downloaded	: 10Oct'15
+		
+	Mujoco		:: Advanced physics simulation engine
+		Source		: www.roboti.us
+		Version		: 1.31
+		Released 	: 23Apr'16
+		
+	Author		:: Vikash Kumar
+		Contacts 	: kumar@roboti.us
+		Last edits 	: 30Apr16, 6Dec'15
+====================================================== -->
+
+<mujoco model="wam">
+    <default>
+        <default class="wam">
+            <joint type="hinge" limited="true" pos="0 0 0" axis="0 0 1" frictionloss="0.2" damping="50" stiffness="0" armature="1"/>
+            
+            <default class="viz">
+                <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.7 0.7 0.7 1"/>
+            </default>
+
+            <default class="col">
+                <geom type="mesh" contype="0" conaffinity="1" group="0" rgba="0.5 0.6 0.7 1"/>
+            </default>
+        </default>
+    </default>
+        
+    <actuator>
+        <motor ctrllimited="true" ctrlrange="-70 70" joint="wam_joint_1" name="torq_j1"/>
+        <motor ctrllimited="true" ctrlrange="-70 70" joint="wam_joint_2" name="torq_j2"/>
+        <motor ctrllimited="true" ctrlrange="-70 70" joint="wam_joint_3" name="torq_j3"/>
+        <motor ctrllimited="true" ctrlrange="-70 70" joint="wam_joint_4" name="torq_j4"/>
+        <motor ctrllimited="true" ctrlrange="-70 70" joint="wam_joint_5" name="torq_j5"/>
+        <motor ctrllimited="true" ctrlrange="-70 70" joint="wam_joint_6" name="torq_j6"/>
+        <motor ctrllimited="true" ctrlrange="-70 70" joint="wam_joint_7" name="torq_j7"/>
+    </actuator>
+
+    <asset>
+        <mesh file="../common_meshes/pedestal.stl" name="pedestal"/>
+        
+        <mesh name="base_link_fine" file="meshes/base_link_fine.stl"/>
+        <mesh name="base_link_convex" file="meshes/base_link_convex.stl"/>
+        <mesh name="shoulder_link_fine" file="meshes/shoulder_link_fine.stl"/>
+        <mesh name="shoulder_link_convex_decomposition_p1" file="meshes/shoulder_link_convex_decomposition_p1.stl"/>
+        <mesh name="shoulder_link_convex_decomposition_p2" file="meshes/shoulder_link_convex_decomposition_p2.stl"/>
+        <mesh name="shoulder_link_convex_decomposition_p3" file="meshes/shoulder_link_convex_decomposition_p3.stl"/>
+        <mesh name="shoulder_pitch_link_fine" file="meshes/shoulder_pitch_link_fine.stl"/>
+        <mesh name="shoulder_pitch_link_convex" file="meshes/shoulder_pitch_link_convex.stl"/>
+        <mesh name="upper_arm_link_fine" file="meshes/upper_arm_link_fine.stl"/>
+        <mesh name="upper_arm_link_convex_decomposition_p1" file="meshes/upper_arm_link_convex_decomposition_p1.stl"/>
+        <mesh name="upper_arm_link_convex_decomposition_p2" file="meshes/upper_arm_link_convex_decomposition_p2.stl"/>
+        <mesh name="elbow_link_fine" file="meshes/elbow_link_fine.stl"/>
+        <mesh name="elbow_link_convex" file="meshes/elbow_link_convex.stl"/>
+        <mesh name="forearm_link_fine" file="meshes/forearm_link_fine.stl"/>
+        <mesh name="forearm_link_convex_decomposition_p1" file="meshes/forearm_link_convex_decomposition_p1.stl"/>
+        <mesh name="forearm_link_convex_decomposition_p2" file="meshes/forearm_link_convex_decomposition_p2.stl"/>
+        <mesh name="wrist_yaw_link_fine" file="meshes/wrist_yaw_link_fine.stl"/>
+        <mesh name="wrist_yaw_link_convex_decomposition_p1" file="meshes/wrist_yaw_link_convex_decomposition_p1.stl"/>
+        <mesh name="wrist_yaw_link_convex_decomposition_p2" file="meshes/wrist_yaw_link_convex_decomposition_p2.stl"/>
+        <mesh name="wrist_pitch_link_fine" file="meshes/wrist_pitch_link_fine.stl"/>
+        <mesh name="wrist_pitch_link_convex_decomposition_p1" file="meshes/wrist_pitch_link_convex_decomposition_p1.stl"/>
+        <mesh name="wrist_pitch_link_convex_decomposition_p2" file="meshes/wrist_pitch_link_convex_decomposition_p2.stl"/>
+        <mesh name="wrist_pitch_link_convex_decomposition_p3" file="meshes/wrist_pitch_link_convex_decomposition_p3.stl"/>
+        <mesh name="wrist_palm_link_fine" file="meshes/wrist_palm_link_fine.stl"/>
+        <mesh name="wrist_palm_link_convex" file="meshes/wrist_palm_link_convex.stl"/>
+
+        <!-- Custom textures based on body names for domain randomization -->
+        <texture type="cube" name="pedestal_tex" builtin="flat" width="100" height="100" rgb1="0.2 0.2 0.2" rgb2="0.2 0.2 0.2"/>
+
+        <!-- Custom mats based on body names for domain randomization -->
+        <material name="pedestal_mat" texture="pedestal_tex"/>
+    </asset>
+
+
+    <worldbody>
+        <body name="base" childclass="wam" pos="0 0 0">
+            <!-- robot view -->
+            <camera mode="fixed" name="robotview" pos="1.0 0 0.4" quat="0.653 0.271 0.271 0.653"/>
+            <body name="controller_box" pos="0 0 0">
+                <inertial diaginertia="1.71363 1.27988 0.809981" mass="46.64" pos="-0.325 0 -0.38"/>
+                <geom pos="-0.325 0 -0.38" size="0.11 0.2 0.265" type="box" name="controller_box_col"/>
+            </body>
+            <body name="pedestal_feet" pos="0 0 0">
+                <inertial diaginertia="8.16095 9.59375 15.0785" mass="167.09" pos="-0.1225 0 -0.758"/>
+                <geom pos="-0.1225 0 -0.758" size="0.385 0.35 0.155" type="box" name="pedestal_feet_col"/>
+            </body>
+            <body name="torso" pos="0 0 0">
+                <inertial diaginertia="1e-08 1e-08 1e-08" mass="0.0001" pos="0 0 0"/>
+                <geom conaffinity="0" contype="0" group="1" rgba="0.2 0.2 0.2 1" size="0.05 0.05 0.05" type="box" name="torso_col"/>
+            </body>
+            <body name="pedestal" pos="0 0 0">
+                <inertial diaginertia="6.0869 5.81635 4.20915" mass="60.864" pos="0 0 0" quat="0.659267 -0.259505 -0.260945 0.655692"/>
+                <geom conaffinity="0" contype="0" group="1" mesh="pedestal" type="mesh" name="pedestal_col1" material="pedestal_mat" />
+                <geom pos="-0.02 0 -0.29" rgba="0.2 0.2 0.2 1" size="0.18 0.31" type="cylinder" name="pedestal_col2"/>
+            </body>
+
+            <inertial pos="0 0 0" mass="1" diaginertia="0.1 0.1 0.1" />
+            <geom class="viz" mesh="base_link_fine"/>
+            <geom class="col" mesh="base_link_convex"/>
+            <body name="wam_link_1" pos="0 0 0.346">
+                <inertial pos="-0.00443422 -0.00066489 -0.128904" quat="0.69566 0.716713 -0.0354863 0.0334839" mass="5" diaginertia="0.135089 0.113095 0.0904426" />
+                <joint name="wam_joint_1" range="-2.6 2.6" damping="1.98"/>
+                <geom class="viz" mesh="shoulder_link_fine"/>
+                <geom class="col" mesh="shoulder_link_convex_decomposition_p1"/>
+                <geom class="col" mesh="shoulder_link_convex_decomposition_p2"/>
+                <geom class="col" mesh="shoulder_link_convex_decomposition_p3"/>
+                <body name="wam_link_2" pos="0 0 0" quat="0.707107 -0.707107 0 0">
+                    <inertial pos="-0.00236981 -0.0154211 0.0310561" quat="0.961794 0.273112 -0.0169316 0.00866592" mass="3.87494" diaginertia="0.0214195 0.0167127 0.0126452" /> <!--seems off-->
+                    <joint name="wam_joint_2" range="-1.985 1.985" damping="0.55"/>
+                    <geom class="viz" mesh="shoulder_pitch_link_fine"/>
+                    <geom class="col" mesh="shoulder_pitch_link_convex"/>
+                    <body name="wam_link_3" pos="0 0 0" quat="0.707107 0.707107 0 0">
+                        <inertial pos="0.00683259 3.309e-005 0.392492" quat="0.647136 0.0170822 0.0143038 0.762049" mass="2.20228" diaginertia="0.0592718 0.0592207 0.00313419" />
+                        <joint name="wam_joint_3" range="-2.8 2.8" damping="1.65"/>
+                        <geom class="viz" mesh="upper_arm_link_fine"/>
+                        <geom class="col" mesh="upper_arm_link_convex_decomposition_p1"/>
+                        <geom class="col" mesh="upper_arm_link_convex_decomposition_p2"/>
+                        <body name="wam_link_4" pos="0.045 0 0.55" quat="0.707107 -0.707107 0 0">
+                            <inertial pos="-0.0400149 -0.142717 -0.00022942" quat="0.704281 0.706326 0.0180333 0.0690353" mass="0.500168" diaginertia="0.0151047 0.0148285 0.00275805" />
+                            <joint name="wam_joint_4" range="-0.9 3.14159" damping="0.88"/>
+                            <geom class="viz" mesh="elbow_link_fine"/>
+                            <geom class="col" mesh="elbow_link_convex"/>
+                            <geom class="viz" mesh="forearm_link_fine" pos="-.045 -0.0730 0" euler="1.57 0 0"/>
+                            <geom class="col" mesh="forearm_link_convex_decomposition_p1" pos="-0.045 -0.0730 0" euler="1.57 0 0"/>
+                            <geom class="col" mesh="forearm_link_convex_decomposition_p2" pos="-.045 -0.0730 0" euler="1.57 0 0"/>
+                            <body name="wam_link_5" pos="-0.045 -0.3 0" quat="0.707107 0.707107 0 0">
+                                <inertial pos="8.921e-005 0.00435824 -0.00511217" quat="0.630602 0.776093 0.00401969 -0.002372" mass="1.05376" diaginertia="0.000555168 0.00046317 0.000234072" /> <!--this is an approximation-->
+                                <joint name="wam_joint_5" range="-4.55 1.25" damping="0.55"/>
+                                <geom class="viz" mesh="wrist_yaw_link_fine"/>
+                                <geom class="col" mesh="wrist_yaw_link_convex_decomposition_p1"/>
+                                <geom class="col" mesh="wrist_yaw_link_convex_decomposition_p2"/>
+                                <body name="wam_link_6" pos="0 0 0" quat="0.707107 -0.707107 0 0">
+                                    <inertial pos="-0.00012262 -0.0246834 -0.0170319" quat="0.630602 0.776093 0.00401969 -0.002372" mass="0.517974" diaginertia="0.000555168 0.00046317 0.000234072" />
+                                    <joint name="wam_joint_6" range="-1.5707 1.5707" damping="0.11"/>
+                                    <geom class="viz" mesh="wrist_pitch_link_fine"/>
+                                    <geom class="col" mesh="wrist_pitch_link_convex_decomposition_p1"/>
+                                    <geom class="col" mesh="wrist_pitch_link_convex_decomposition_p2"/>
+                                    <geom class="col" mesh="wrist_pitch_link_convex_decomposition_p3"/>
+                                    <body name="wam_link_7" pos="0 0 0" quat="0.707107 0.707107 0 0">
+                                        <inertial pos="0 0 0.055" quat="0.707107 0 0 0.707107" mass="0.0828613" diaginertia="0.00020683 0.00010859 0.00010851" />
+                                        <joint name="wam_joint_7" range="-3 3" damping="0.11"/>
+                                        <geom class="viz" mesh="wrist_palm_link_fine"/>
+                                        <geom class="col" mesh="wrist_palm_link_convex"/>
+
+                                        <body name="right_hand" pos="0 0 0" quat="1 0 0 0">
+                                            <!-- This sites were added for visualization. They are all standardized between models-->
+                                            <!-- Position mimics the gripper attachment point (right_hand) -->
+                                            <!--  Y-axis should be perpendicular to grasping motion, and Z-axis should point out of the robot eef -->
+                                            <site name="ee" pos="0 0 0" size="0.01 0.01 0.01" rgba="0 0 1 1" type="sphere" group="1"/>
+                                            <site name="ee_x" pos="0 0 0" size="0.005 .1"  quat="0.707105 0.707108 0 0 " rgba="1 0 0 0" type="cylinder" group="1"/>
+                                            <site name="ee_z" pos="0 0 0" size="0.005 .1" quat="0.707105 0 0 0.707108" rgba="0 0 1 0" type="cylinder" group="1"/>
+                                            <site name="ee_y" pos="0 0 0" size="0.005 .1" quat="0.707105 0 0.707108 0 " rgba="0 1 0 0" type="cylinder" group="1"/>
+                                            <!-- This camera points out from the eef. -->
+<!--                                            <camera mode="fixed" name="eye_in_hand" pos="0.08 0 0" quat="0 0.707108 0.707108 0" fovy="75"/>-->
+                                            <camera mode="fixed" name="eye_in_hand" pos="0.08 0 0" quat="0 0 -1 0" fovy="120"/>
+                                            <!-- To add gripper -->
+                                        </body>    
+                                    </body>
+                                </body>
+                            </body>
+                        </body>
+                    </body>
+                </body>
+            </body>
+        </body>
+    </worldbody>    
+</mujoco>

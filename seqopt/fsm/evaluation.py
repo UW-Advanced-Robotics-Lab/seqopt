@@ -1,5 +1,6 @@
 from typing import Callable, List, Optional, Tuple, Union
 
+from dmc2gym.wrappers import DMCWrapper
 import gym
 import matplotlib.pyplot as plt
 import numpy as np
@@ -44,7 +45,11 @@ def evaluate_policy(
     if isinstance(env, VecEnv):
         assert env.num_envs == 1, "You must pass only one environment when using this function"
 
-    if render:
+    # The rendering is a bit different depending on if the environment is a DeepMind Control Suite environment
+    # that has been wrapped using the dmc2gym package, or if its a native gym environment
+    is_dm_env = isinstance(env.envs[0].env.env, DMCWrapper)
+
+    if render and is_dm_env:
         plt.ion()
         plt.show()
         image = plt.imshow(np.zeros((480, 640), dtype=np.uint8), animated=True)
@@ -71,7 +76,6 @@ def evaluate_policy(
             clipped_actions = np.clip(action.cpu().numpy(), env.action_space.low, env.action_space.high)
             if len(clipped_actions.shape) == 1:
                 clipped_actions = np.expand_dims(clipped_actions, 0)
-
             new_obs, _, dones, infos = env.step(clipped_actions)
             new_obs = obs_to_box_space(env.observation_space, new_obs)
             curr_obs = np.vstack([new_obs[idx] if not done \
@@ -86,6 +90,21 @@ def evaluate_policy(
                                  curr_obs,
                                  clipped_actions,
                                  np.array([[active_option]])).squeeze()
+            # with th.no_grad():
+            #     q_vals = []
+            #     obs_tensor = th.as_tensor(obs)
+            #     for opt in range(model.num_options):
+            #         critic_obs = model.mask(obs_tensor, model.critic_obs_masks[opt])
+            #         if model.actors[opt] is not None:
+            #             actor_obs = model.mask(obs_tensor, model.actor_obs_masks[opt])
+            #             critic_act = model.actors[opt](actor_obs)
+            #         else:
+            #             critic_act = None
+            #         q_val = min(model.critics[opt](critic_obs, critic_act))
+            #         q_vals.append(q_val)
+            #     print(f"Q-values - Option 0: {q_vals[0]}, "
+            #           f"Option 1: {q_vals[1]}, "
+            #           f"Option 2: {q_vals[2]}")
             obs = new_obs
             episode_reward += reward
 
@@ -100,19 +119,21 @@ def evaluate_policy(
                 callback(locals(), globals())
             episode_length += 1
             if render:
-                # This call works with standard gym environments, but not with dm_control environments
-                # UNCOMMENT IF WORKING WITH STANDARD GYM ENVIRONMENTS
-                env.render()
+                # Relevant information
                 print(f'Episode {i + 1}/{n_eval_episodes} - '
-                      f'Step {episode_length}/{env.envs[0].env._max_episode_steps} - '
+                      # f'Step {episode_length}/{env.envs[0].env._max_episode_steps} - '
                       f'Option {active_option} - '
                       f'Immediate Reward: {reward} - '
                       f'Reward {episode_reward}',
                       end='\n')
-                # # COMMENT BELOW IF WORKING WITH STANDARD GYM ENVIRONMENTS
-                # frame = env.envs[0].env.physics.render(height=480, width=640, camera_id=0)
-                # image.set_data(frame)
-                # plt.pause(0.001)
+
+                # Rendering
+                if is_dm_env:
+                    frame = env.envs[0].env.physics.render(height=480, width=640, camera_id=0)
+                    image.set_data(frame)
+                    plt.pause(0.001)
+                else:
+                    env.envs[0].env.render()
 
             if terminate:
                 active_option = (active_option + 1) % model.num_options

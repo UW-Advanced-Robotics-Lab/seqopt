@@ -1,0 +1,13 @@
+<mujocoinclude>
+    <actuator>
+        <motor name="joint1_motor" joint="joint_1"/>
+        <motor name="joint2_motor" joint="joint_2"/>
+        <motor name="joint3_motor" joint="joint_3"/>
+        <motor name="joint4_motor" joint="joint_4"/>
+        <motor name="joint5_motor" joint="joint_5"/>
+        <motor name="joint6_motor" joint="joint_6"/>
+        <motor name="joint_thumb_motor" joint="finger_1"/>
+        <motor name="joint_index_motor" joint="finger_2"/>
+        <motor name="joint_pinky_motor" joint="finger_3"/>
+    </actuator>
+</mujocoinclude>

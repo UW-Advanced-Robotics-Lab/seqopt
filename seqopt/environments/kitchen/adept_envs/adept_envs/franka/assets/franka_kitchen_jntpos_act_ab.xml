@@ -19,12 +19,12 @@
     <include file="../../../../adept_models/scenes/basic_scene.xml"/>
     <include file="../../../../third_party/franka/assets/assets.xml"/>
     <include file="../../../../third_party/franka/assets/actuator0.xml"/>
-<!--    <include file="../../../../adept_models/kitchen/assets/oven_asset.xml"/>-->
-<!--    <include file="../../../../adept_models/kitchen/assets/counters_asset.xml"/>-->
+    <include file="../../../../adept_models/kitchen/assets/oven_asset.xml"/>
+    <include file="../../../../adept_models/kitchen/assets/counters_asset.xml"/>
     <include file="../../../../adept_models/kitchen/assets/backwall_asset.xml"/>
     <include file="../../../../adept_models/kitchen/assets/slidecabinet_asset.xml"/>
-<!--    <include file="../../../../adept_models/kitchen/assets/hingecabinet_asset.xml"/>-->
-<!--    <include file="../../../../adept_models/kitchen/assets/microwave_asset.xml"/>-->
+    <include file="../../../../adept_models/kitchen/assets/hingecabinet_asset.xml"/>
+    <include file="../../../../adept_models/kitchen/assets/microwave_asset.xml"/>
 <!--    <include file="../../../../adept_models/kitchen/assets/kettle_asset.xml"/>-->
 
     <visual>
@@ -60,24 +60,24 @@
 
         <body name='desk' pos='-0.1 0.75 0'>
 
-<!--            <body name="counters1" pos="0 0 0" >-->
-<!--                <include file="../../../../adept_models/kitchen/assets/counters_chain.xml"/>-->
-<!--            </body>-->
-<!--            <body name="oven" pos="0 0 0" >-->
-<!--                <include file="../../../../adept_models/kitchen/assets/oven_chain.xml"/>-->
-<!--            </body>-->
+            <body name="counters1" pos="0 0 0" >
+                <include file="../../../../adept_models/kitchen/assets/counters_chain.xml"/>
+            </body>
+            <body name="oven" pos="0 0 0" >
+                <include file="../../../../adept_models/kitchen/assets/oven_chain.xml"/>
+            </body>
             <body name="backwall" pos="0 0 0" >
                 <include file="../../../../adept_models/kitchen/assets/backwall_chain.xml"/>
             </body>
             <body name="slidecabinet" pos="0.4 0.3 2.6" >
                 <include file="../../../../adept_models/kitchen/assets/slidecabinet_chain.xml"/>
             </body>
-<!--            <body name="hingecabinet" pos="-0.504 0.28 2.6" >-->
-<!--                <include file="../../../../adept_models/kitchen/assets/hingecabinet_chain.xml"/>-->
-<!--            </body>-->
-<!--            <body name="microwave" pos="-0.750 -0.025 1.6" euler="0 0 0.3">-->
-<!--                <include file="../../../../adept_models/kitchen/assets/microwave_chain.xml"/>-->
-<!--            </body>-->
+            <body name="hingecabinet" pos="-0.504 0.28 2.6" >
+                <include file="../../../../adept_models/kitchen/assets/hingecabinet_chain.xml"/>
+            </body>
+            <body name="microwave" pos="-0.750 -0.025 1.6" euler="0 0 0.3">
+                <include file="../../../../adept_models/kitchen/assets/microwave_chain.xml"/>
+            </body>
         </body>
 <!--        <body name="kettle" pos="-0.269 0.35 1.626">-->
 <!--            <freejoint/>-->
@@ -87,11 +87,11 @@
     </worldbody>
 
 
-<!--    <keyframe>-->
-<!--        <key qpos='0.16 -1.76 1.84 -2.51 0.36 0.79 1.55 0.00 0.0 1.25561e-05 1.57437e-07 1.25561e-05 1.57437e-07 1.25561e-05 1.57437e-07 1.25561e-05 1.57437e-07 8.24417e-05 9.48283e-05 0 0 0 0 -0.269 0.35 1.61523 1 1.34939e-19 -3.51612e-05 -7.50168e-19'/>-->
-<!--    </keyframe>-->
     <keyframe>
-        <key qpos='0.16 -1.76 1.84 -2.51 0.36 0.79 1.55 0.00 0.0 0'/>
+        <key qpos='0.16 -1.76 1.84 -2.51 0.36 0.79 1.55 0.00 0.0 1.25561e-05 1.57437e-07 1.25561e-05 1.57437e-07 1.25561e-05 1.57437e-07 1.25561e-05 1.57437e-07 8.24417e-05 9.48283e-05 0 0 0 0'/>
     </keyframe>
+<!--    <keyframe>-->
+<!--        <key qpos='0.16 -1.76 1.84 -2.51 0.36 0.79 1.55 0.00 0.0 0.0 0.0'/>-->
+<!--    </keyframe>-->
 
 </mujoco>

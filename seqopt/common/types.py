@@ -17,32 +17,55 @@ class RolloutReturn(NamedTuple):
     continue_training: bool
 
 
+class RolloutBufferSamples(NamedTuple):
+    observations: th.Tensor
+    next_observations: th.Tensor
+    actions: th.Tensor
+    old_log_prob: th.Tensor
+    old_termination_prob: th.Tensor
+    old_option_values: th.Tensor
+    old_next_option_values: th.Tensor
+    advantages: th.Tensor
+    returns: th.Tensor
+
+
+def update(obj: Any, kv: Dict):
+    for k, v in kv.items():
+        if hasattr(obj, k):
+            setattr(obj, k, v)
+
+
+# This class represents the parameters for the actors/critic/terminators/state_counters common to all algorithms
 @dataclass
 class ActorParams:
     default_action: Union[Callable[[th.Tensor], th.Tensor], th.Tensor]
     observation_mask: Optional[Union[Iterable[Union[int, bool]], slice]] = None
     action_mask: Optional[np.ndarray] = None
     lr_schedule: Union[float, Schedule] = 1e-3
-    net_arch: Optional[List[Union[int, Dict[str, List[int]]]]] = None
+    net_arch: Optional[List[int]] = None
     ent_coef: float = 1e-4
     activation_fn: Type[th.nn.Module] = th.nn.ReLU
     max_grad_norm: float = 0.5
     optimizer_class: Type[th.optim.Optimizer] = th.optim.Adam
     optimizer_kwargs: Dict[str, Any] = field(default_factory=lambda: dict())
 
+    def update(self, kv):
+        update(self, kv)
+
 
 @dataclass
 class CriticParams:
     observation_mask: Optional[Union[Iterable[Union[int, bool]], slice]] = None
-    n_critics: int = 2
     lr_schedule: Union[float, Schedule] = 3e-4
     net_arch: Optional[List[int]] = None
-    tau: float = 0.005
-    target_update_interval: int = 1
     activation_fn: Type[th.nn.Module] = th.nn.ReLU
+    output_activation_fn: Optional[Union[th.nn.Module, Type[th.nn.Module]]] = None
     max_grad_norm: float = 0.5
     optimizer_class: Type[th.optim.Optimizer] = th.optim.Adam
     optimizer_kwargs: Dict[str, Any] = field(default_factory=lambda: dict())
+
+    def update(self, kv):
+        update(self, kv)
 
 
 @dataclass
@@ -57,11 +80,18 @@ class TerminatorParams:
     optimizer_class: Type[th.optim.Optimizer] = th.optim.Adam
     optimizer_kwargs: Dict[str, Any] = field(default_factory=lambda: dict())
 
+    def update(self, kv):
+        update(self, kv)
+
 
 @dataclass
 class ExplorationParams:
     # State-Counting features and corresponding boundaries
     features_extractor: Callable
     feature_boundaries: List[th.Tensor]
+    reward_func: Optional[Callable[[th.Tensor, int], float]] = None
     # Hyperparameters
     scale: float = 1.0
+
+    def update(self, kv):
+        update(self, kv)
