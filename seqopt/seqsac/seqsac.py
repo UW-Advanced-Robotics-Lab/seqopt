@@ -636,6 +636,7 @@ class SequenceSAC(object):
             next_option_q_values_pi = th.cat(next_critic.forward(next_critic_obs, next_option_actions_pi), dim=1)
             min_next_option_qf_pi, _ = th.min(next_option_q_values_pi, dim=1, keepdim=True)
         _, termination_prob = self.sample_termination(option_id, replay_data.observations)
+        # TODO(someshdaga): I think we should use the same terminator_ent_coef in both terms
         sample_terminator_losses =\
             ((1.0 - termination_prob) * (terminator_ent_coef * th.log(1.0 - termination_prob) - min_qf_pi_) +
              termination_prob * (next_terminator_ent_coef * th.log(termination_prob) - min_next_option_qf_pi))

@@ -54,21 +54,21 @@ ENV_CONFIG.actor_params[2].update(
 ENV_CONFIG.critic_params[0].update(
     dict(
         lr_schedule=3e-4,
-        output_activation_fn=th.nn.LeakyReLU(negative_slope=1e-2)
+        output_activation_fn=th.nn.LeakyReLU(negative_slope=1e-1)
     )
 )
 
 ENV_CONFIG.critic_params[1].update(
     dict(
         lr_schedule=3e-4,
-        output_activation_fn=th.nn.LeakyReLU(negative_slope=1e-2)
+        output_activation_fn=th.nn.LeakyReLU(negative_slope=1e-1)
     )
 )
 
 ENV_CONFIG.critic_params[2].update(
     dict(
         lr_schedule=3e-4,
-        output_activation_fn=th.nn.LeakyReLU(negative_slope=1e-2)
+        output_activation_fn=th.nn.LeakyReLU(negative_slope=1e-1)
     )
 )
 
@@ -76,7 +76,7 @@ ENV_CONFIG.critic_params[2].update(
 ENV_CONFIG.terminator_params[0].update(
     dict(
         lr_schedule=1e-5,
-        ent_coef=1e-4,
+        ent_coef=5e-1,
         target_kl=5e-4
     )
 )
@@ -84,7 +84,7 @@ ENV_CONFIG.terminator_params[0].update(
 ENV_CONFIG.terminator_params[1].update(
     dict(
         lr_schedule=1e-5,
-        ent_coef=1e-4,
+        ent_coef=5e-1,
         target_kl=5e-4
     )
 )
@@ -92,7 +92,7 @@ ENV_CONFIG.terminator_params[1].update(
 ENV_CONFIG.terminator_params[2].update(
     dict(
         lr_schedule=1e-5,
-        ent_coef=1e-4,
+        ent_coef=5e-1,
         target_kl=5e-4
     )
 )

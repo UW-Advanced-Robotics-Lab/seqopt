@@ -50,22 +50,19 @@ ENV_CONFIG.actor_params[2].update(
 # Update critic parameters
 ENV_CONFIG.critic_params[0].update(
     dict(
-        lr_schedule=1e-3,
-        ent_coef=1e-4
+        lr_schedule=3e-5,
     )
 )
 
 ENV_CONFIG.critic_params[1].update(
     dict(
-        lr_schedule=1e-3,
-        ent_coef=1e-4
+        lr_schedule=3e-5,
     )
 )
 
 ENV_CONFIG.critic_params[2].update(
     dict(
-        lr_schedule=1e-3,
-        ent_coef=1e-4
+        lr_schedule=3e-5,
     )
 )
 
@@ -108,7 +105,7 @@ def demo_schedule(progress_remaining):
 ALGORITHM_CONFIG = SACConfig(
     total_steps=int(1e7),
     buffer_size=int(3e5),
-    gamma=0.98,
+    gamma=0.95,
     batch_size=256,
     n_eval_episodes=1,
     log_interval=1,

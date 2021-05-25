@@ -169,14 +169,15 @@ def get_env_config():
 
         # Define the intrinsic reward function
         def intrinsic_reward_func(observation: np.ndarray, count: int) -> np.float32:
-            reach_potential = scaled_dist(observation[..., obs_dict['reach_dist']], scale=0.8)
-            reach_potential_max = 1.0
-            goodness_decay = np.log(2) / 0.1
-            goodness = np.exp((reach_potential - reach_potential_max) * goodness_decay)
-            count_decay = np.log(2) / 1e4
-            count_factor = np.exp(-count_decay * count)
-            intrinsic_reward = goodness * count_factor
-            return intrinsic_reward.item()
+            return 1. / np.sqrt(count)
+            # reach_potential = scaled_dist(observation[..., obs_dict['reach_dist']], scale=0.8)
+            # reach_potential_max = 1.0
+            # goodness_decay = np.log(2) / 0.1
+            # goodness = np.exp((reach_potential - reach_potential_max) * goodness_decay)
+            # count_decay = np.log(2) / 1e4
+            # count_factor = np.exp(-count_decay * count)
+            # intrinsic_reward = goodness * count_factor
+            # return intrinsic_reward.item()
 
         grasp_exploration_params = ExplorationParams(features_extractor=features_extractor,
                                                      feature_boundaries=features_boundaries,
