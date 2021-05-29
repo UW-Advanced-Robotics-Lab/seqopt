@@ -1,5 +1,8 @@
 from collections import OrderedDict
 import numpy as np
+from scipy.spatial.transform import Rotation
+from shapely.geometry import Point
+from shapely.geometry.polygon import Polygon
 
 from robosuite.environments.robot_env import RobotEnv
 from robosuite.robots import SingleArm
@@ -7,6 +10,8 @@ from robosuite.robots import SingleArm
 from robosuite.models.arenas import TableArena
 from robosuite.models.objects import DoorObject
 from robosuite.models.tasks import ManipulationTask, UniformRandomSampler
+
+from robosuite.models.grippers import GripperModel
 
 
 class Door(RobotEnv):
@@ -364,13 +369,46 @@ class Door(RobotEnv):
             di[pr + "door_to_eef_pos"] = door_pos - eef_pos
             di[pr + "handle_to_eef_pos"] = handle_pos - eef_pos
             di["hinge_qpos"] = hinge_qpos
-        
+
+            # Some custom observations (for reward and exploration calculations only)
+            di['reach_dist'] = np.array([np.linalg.norm(di[pr + "handle_to_eef_pos"])])
+            di['gripper_euler_angles'] = Rotation.from_quat(di[pr + 'eef_quat']).as_euler('xyz')
+
+            # gripper_geom_groups = [['gripper0_thumb_proximal_collision',
+            #                         'gripper0_thumb_distal_collision',
+            #                         'gripper0_thumb_pad_collision'],
+            #                        ['gripper0_index_proximal_collision',
+            #                         'gripper0_index_distal_collision',
+            #                         'gripper0_index_pad_collision'],
+            #                        ['gripper0_pinky_proximal_collision',
+            #                         'gripper0_pinky_distal_collision',
+            #                         'gripper0_pinky_pad_collision']]
+            #
+            # grasped = np.array([np.float32(self._check_grasp(gripper_geom_groups, 'handle'))])
+            # self._check_handle_grasp()
+            # di['grasped'] = grasped
+
+            # Get the average angle of the finger joints (only the first part of all fingers)
+            joint_names = ['gripper0_joint_thumb', 'gripper0_joint_index', 'gripper0_joint_pinky']
+            joint_ids = [self.sim.model.joint_name2id(jnt) for jnt in joint_names]
+            fingertip_dist = np.mean(self.sim.data.qpos[joint_ids])
+            di['fingertip_dist'] = np.array([fingertip_dist])
+
+            # Check if handle is grasped
+            grasped = np.array([np.float32((fingertip_dist < 0.5) and self._check_handle_in_grasp())])
+            di['grasped'] = grasped
+
             di['object-state'] = np.concatenate([
                 di["door_pos"],
                 di["handle_pos"],
                 di[pr + "door_to_eef_pos"],
                 di[pr + "handle_to_eef_pos"],
-                di["hinge_qpos"]
+                di["hinge_qpos"],
+                # Our custom observations
+                di['grasped'],
+                di['fingertip_dist'],
+                di['reach_dist'],
+                di['gripper_euler_angles']
             ])
 
             # Also append handle qpos if we're using a locked door version with rotatable handle
@@ -380,6 +418,175 @@ class Door(RobotEnv):
                 di['object-state'] = np.concatenate([di["object-state"], di["handle_qpos"]])
 
         return di
+
+    def _check_handle_in_grasp(self):
+        # To ensure that the handle is grasped, we check if the line extending from the end effector site
+        # to the palm, intersects at least two of the four planar faces of the handle (not taking into account
+        # the outward facing face of the handle). This requires some geometry for the intersection of lines
+        # with planes, and bounds checking to ensure that the intersection actually happens since the size of
+        # all entities is finite. An additional check it to ensure that one or more fingers is actually
+        # making contact with the handle
+
+        handle_id = self.sim.model.geom_name2id('handle')
+
+        # Get the position (center) of the handle and the orientation of the handle in world coordinates
+        handle_xpos = self.sim.data.geom_xpos[handle_id]
+        handle_xmat = self.sim.data.geom_xmat[handle_id].reshape(3, 3)
+        handle_size = self.sim.model.geom_size[handle_id]
+
+        # Get the corners of the cuboid representing the handle (there should be 8 values)
+        assert len(handle_size) == 3, 'Expected a box shape for handle! Got something else!'
+        corners = []
+        for dy in [-handle_size[1], handle_size[1]]:
+            for dz in [-handle_size[2], handle_size[2]]:
+                for dx in [-handle_size[0], handle_size[0]]:
+                    rel_pos = np.dot(handle_xmat, np.array([dx, dy, dz]))
+                    pos = handle_xpos + rel_pos
+                    corners.append(pos)
+
+        # Segregate the corners into points for the 4 faces
+        faces = np.asarray([
+            [corners[0], corners[1], corners[3], corners[2]],  # Front face
+            [corners[2], corners[3], corners[7], corners[6]],  # Top face
+            [corners[4], corners[5], corners[7], corners[6]],  # Back face
+            [corners[0], corners[1], corners[5], corners[4]]   # Bottom face
+        ])
+
+        # Get the end-effector site and the point on the palm that line along the line extending to the palm
+        # from the end effector
+        eef_site_id = self.sim.model.site_name2id('gripper0_grip_site')
+        end_effector_pos = self.sim.data.site_xpos[eef_site_id]
+        palm_site_id = self.sim.model.site_name2id('gripper0_ft_frame')
+        palm_pos = self.sim.data.site_xpos[palm_site_id]
+        line = np.vstack([end_effector_pos, palm_pos])
+
+        # Check if at least 2 faces are intersected by the line
+        n_faces_intersected = 0
+        for face_id in range(len(faces)):
+            if self._intersect(line, faces[face_id]):
+                n_faces_intersected += 1
+            if n_faces_intersected >= 2:
+                # print(f"Handle inside end-effector grasp")
+                return True
+
+        return False
+
+    def _intersect(self, line_pts, plane_pts):
+        line_vector = line_pts[1] - line_pts[0]
+
+        # Assume plane pts are provides in a CCW direction (doesn't matter, since we correct for it anyway)
+        normal_vector = np.cross(plane_pts[1] - plane_pts[0], plane_pts[2] - plane_pts[1])
+
+        # Calculate dot product of line vector and normal vector of plane
+        line_plane_dotp = np.dot(line_vector, normal_vector)
+        # We want to ensure that the normal vector points in the same half-space as the line vector
+        if line_plane_dotp < 0:
+            normal_vector *= -1
+
+        # They intersect (at least for infinitely long objects) as long as the line vector and normal vector
+        # are not perpendicular. We use a tolerance value instead of zero
+        if abs(np.dot(line_vector / np.linalg.norm(line_vector), normal_vector / np.linalg.norm(normal_vector))) > 1e-3:
+            # Calculate point of intersection
+            line_frac = np.dot((plane_pts[0] - line_pts[0]), normal_vector) / line_plane_dotp
+            if 0 <= line_frac <= 1:
+                # Calculate the intersection point on the plane
+                intersect_pt = line_pts[0] + line_frac * line_vector
+
+                # Check if the intersection point lies within the points of the plane
+                # We want to ignore the normal dimension of all points
+                # Basically, we want to go from a 3D -> 2D Coordinate system
+                # We set plane_pts[0] as the origin
+                origin = plane_pts[0].copy()
+                plane_pts = plane_pts - origin
+                intersect_pt = intersect_pt - origin
+                # Define new basis vectors (any points on the plane should provide an axis perpendicular to
+                # the normal vector)
+                x_axis = plane_pts[1] / np.linalg.norm(plane_pts[1])
+                y_axis = np.cross(normal_vector, x_axis)
+                y_axis /= np.linalg.norm(y_axis)
+
+                # Project all points into this 2D space
+                new_plane_pts = [np.array([np.dot(plane_pt, x_axis), np.dot(plane_pt, y_axis)])
+                                 for plane_pt in plane_pts]
+                new_intersection_pt = np.array([np.dot(intersect_pt, x_axis), np.dot(intersect_pt, y_axis)])
+
+                # Use the shapely API to determine if the point lies within the polygon formed by the plane in 2D space
+                polygon = Polygon(new_plane_pts)
+                point = Point(new_intersection_pt)
+
+                return polygon.contains(point)
+
+            else:
+                # The line intersects the plane at some point, but not within the bounds of both of the
+                # provided line points
+                return False
+        else:
+            return False
+
+    def _check_grasp(self, gripper, object_geoms):
+        """
+        Checks whether the specified gripper as defined by @gripper is grasping the specified object in the environment.
+        By default, this will return True if at least one geom in both the "left_fingerpad" and "right_fingerpad" geom
+        groups are in contact with any geom specified by @object_geoms. Custom gripper geom groups can be
+        specified with @gripper as well.
+        Args:
+            gripper (GripperModel or str or list of str or list of list of str): If a MujocoModel, this is specific
+            gripper to check for grasping (as defined by "left_fingerpad" and "right_fingerpad" geom groups). Otherwise,
+                this sets custom gripper geom groups which together define a grasp. This can be a string
+                (one group of single gripper geom), a list of string (multiple groups of single gripper geoms) or a
+                list of list of string (multiple groups of multiple gripper geoms). At least one geom from each group
+                must be in contact with any geom in @object_geoms for this method to return True.
+            object_geoms (str or list of str or MujocoModel): If a MujocoModel is inputted, will check for any
+                collisions with the model's contact_geoms. Otherwise, this should be specific geom name(s) composing
+                the object to check for contact.
+        Returns:
+            bool: True if the gripper is grasping the given object
+        """
+        # Convert object, gripper geoms into standardized form
+        o_geoms = [object_geoms] if type(object_geoms) is str else object_geoms
+        if isinstance(gripper, GripperModel):
+            g_geoms = [gripper.important_geoms["left_fingerpad"], gripper.important_geoms["right_fingerpad"]]
+        elif type(gripper) is str:
+            g_geoms = [[gripper]]
+        else:
+            # Parse each element in the gripper_geoms list accordingly
+            g_geoms = [[g_group] if type(g_group) is str else g_group for g_group in gripper]
+
+        # Search for collisions between each gripper geom group and the object geoms group
+        for g_group in g_geoms:
+            if not self.check_contact(g_group, o_geoms):
+                return False
+        return True
+
+    def check_contact(self, geoms_1, geoms_2=None):
+        """
+        Finds contact between two geom groups.
+        Args:
+            geoms_1 (str or list of str or MujocoModel): an individual geom name or list of geom names or a model. If
+                a MujocoModel is specified, the geoms checked will be its contact_geoms
+            geoms_2 (str or list of str or MujocoModel or None): another individual geom name or list of geom names.
+                If a MujocoModel is specified, the geoms checked will be its contact_geoms. If None, will check
+                any collision with @geoms_1 to any other geom in the environment
+        Returns:
+            bool: True if any geom in @geoms_1 is in contact with any geom in @geoms_2.
+        """
+        # Check if either geoms_1 or geoms_2 is a string, convert to list if so
+        if type(geoms_1) is str:
+            geoms_1 = [geoms_1]
+
+        if type(geoms_2) is str:
+            geoms_2 = [geoms_2]
+
+        for contact in self.sim.data.contact[: self.sim.data.ncon]:
+            # check contact geom in geoms
+            c1_in_g1 = self.sim.model.geom_id2name(contact.geom1) in geoms_1
+            c2_in_g2 = self.sim.model.geom_id2name(contact.geom2) in geoms_2 if geoms_2 is not None else True
+            # check contact geom in geoms (flipped)
+            c2_in_g1 = self.sim.model.geom_id2name(contact.geom2) in geoms_1
+            c1_in_g2 = self.sim.model.geom_id2name(contact.geom1) in geoms_2 if geoms_2 is not None else True
+            if (c1_in_g1 and c2_in_g2) or (c1_in_g2 and c2_in_g1):
+                return True
+        return False
 
     def _check_success(self):
         """

@@ -29,7 +29,8 @@ def get_env_config():
         ignore_done=False,
         has_offscreen_renderer=False,
         use_camera_obs=False,
-        control_freq=10
+        control_freq=10,
+        gripper_visualizations=True
     )
 
     # Define the observations
@@ -45,7 +46,14 @@ def get_env_config():
         door_to_eef_pos=np.arange(46, 49),
         handle_to_eef_pos=np.arange(49, 52),
         hinge_qpos=np.arange(52, 53),
-        handle_qpos=np.arange(53, 54),
+        # Some custom observations
+        # XXXXXXXXXXXXXXXXXXXXXXXXX
+        grasped=np.arange(53, 54),  # DO NOT USE THIS OBSERVATION IN NEURAL NETWORKS; THIS IS FOR CALCULATING REWARDS
+        fingertip_dist=np.arange(54, 55),
+        reach_dist=np.arange(55, 56),
+        gripper_euler_angles=np.arange(56, 59),
+        # XXXXXXXXXXXXXXXXXXXXXXXXX
+        handle_qpos=np.arange(59, 60),
     )
 
     # Define the reward function
@@ -54,16 +62,16 @@ def get_env_config():
     #   - One to push the handle down
     #   - One to pull the door
     _REACH_REWARD_COEF = 25.0
-    _HANDLE_REWARD_COEF = 100.0
-    _PULL_REWARD_COEF = 100.0
+    _GRASP_REWARD_COEF = _OPEN_DOOR_REWARD_COEF = 100.0
 
     def reward_func(last_obs: np.ndarray,
                     obs: np.ndarray,
                     action: np.ndarray,
                     option_id: np.ndarray):
         # Calculate distance to eef for the last and current observation
-        last_reach_dist, reach_dist = np.linalg.norm(last_obs[..., obs_dict['handle_to_eef_pos']]), \
-                                      np.linalg.norm(obs[..., obs_dict['handle_to_eef_pos']])
+        last_reach_dist, reach_dist = last_obs[..., obs_dict['reach_dist']], \
+                                      obs[..., obs_dict['reach_dist']]
+        last_grasped, grasped = last_obs[..., obs_dict['grasped']], obs[..., obs_dict['grasped']]
         last_handle_angle, handle_angle = last_obs[..., obs_dict['handle_qpos']], obs[..., obs_dict['handle_qpos']]
         last_door_angle, door_angle = last_obs[..., obs_dict['hinge_qpos']], obs[..., obs_dict['hinge_qpos']]
 
@@ -71,26 +79,27 @@ def get_env_config():
         last_handle_angle, handle_angle = 1.57 - last_handle_angle, 1.57 - handle_angle
         last_door_angle, door_angle = 0.4 - last_door_angle, 0.4 - door_angle
 
-
         # Assign rewards based on the option engaged
         reach_reward = _REACH_REWARD_COEF * (scaled_dist(reach_dist, scale=0.8) -
                                              scaled_dist(last_reach_dist, scale=0.8))
-        handle_reward = _HANDLE_REWARD_COEF * (scaled_dist(handle_angle, scale=3.0) -
-                                               scaled_dist(last_handle_angle, scale=3.0))
-        pull_reward = _PULL_REWARD_COEF * (scaled_dist(door_angle, scale=0.8) -
-                                           scaled_dist(last_door_angle, scale=0.8))
+        grasp_reward = _GRASP_REWARD_COEF * (grasped - last_grasped) * (scaled_dist(handle_angle, scale=3.0) +
+                                                                          scaled_dist(door_angle, scale=0.8))
+        door_reward = _OPEN_DOOR_REWARD_COEF * last_grasped * ((scaled_dist(handle_angle, scale=3.0) +
+                                                                scaled_dist(door_angle, scale=0.8)) -
+                                                               (scaled_dist(last_handle_angle, scale=3.0) +
+                                                                scaled_dist(last_door_angle, scale=0.8)))
         if len(option_id.shape) < 2:
             option_id = np.expand_dims(option_id, axis=-1)
 
         rew = \
             np.where(option_id == 0,
-                     reach_reward + np.clip(handle_reward, None, 0.) + np.clip(pull_reward, None, 0.),
+                     reach_reward + np.clip(grasp_reward, None, 0.) + np.clip(door_reward, None, 0.),
                      0.) +\
             np.where(option_id == 1,
-                     handle_reward + np.clip(reach_reward, None, 0.) + np.clip(pull_reward, None, 0.),
+                     grasp_reward + np.clip(reach_reward, None, 0.) + np.clip(door_reward, None, 0.),
                      0.) +\
             np.where(option_id == 2,
-                     pull_reward + np.clip(handle_reward, None, 0.) + np.clip(reach_reward, None, 0.),
+                     door_reward + np.clip(grasp_reward, None, 0.) + np.clip(reach_reward, None, 0.),
                      0.)
 
         return rew
@@ -139,7 +148,7 @@ def get_env_config():
 
     reach_exploration_params = None
 
-    # Option 2: Turn the handle
+    # Option 2: Turn the handle (same as the grasp option)
     handle_default_action = np.zeros(7, dtype=np.float32)
     # We should try to close the gripper
     handle_default_action[-1] = 1.
@@ -177,7 +186,49 @@ def get_env_config():
         obs_dict['handle_qpos']
     ])
 
-    handle_exploration_params = None
+    if count_based_exploration:
+        def features_extractor(states: th.Tensor):
+            # Get the distance, relative angles between the grasper and object and the gripper closure
+            features = states[..., np.concatenate([obs_dict['reach_dist'],
+                                                   obs_dict['fingertip_dist']])]
+            return features
+
+
+        # For distance-based boundary, we will create evenly-spaced values on the log distance scale between
+        # 0.01 - 0.1 m (values outside these ranges are pretty meaningless w.r.t the task, so we can bin them together)
+        dist_boundaries = th.pow(2, th.linspace(-4, -2, steps=10))
+
+        # The angle bounds are evenly spread in 10 degree intervals (it's the same for all of roll, pitch and yaw angles)
+        # step_size = np.pi / 18
+        # angle_boundaries = th.arange(-np.pi + step_size, np.pi, step_size)
+
+        # Gripper bounds (for fingertip dist)
+        step_size = 1.51 / 5
+        gripper_boundaries = th.arange(step_size, 1.51 + step_size, step_size)
+        features_boundaries = [dist_boundaries, gripper_boundaries]
+
+        # Define the intrinsic reward function
+        def intrinsic_reward_func(observation: np.ndarray, count: int) -> np.float32:
+            reach_potential = scaled_dist(observation[..., obs_dict['reach_dist']], scale=0.8)
+            reach_potential_max = 1.0
+            reach_decay = np.log(2) / 0.2
+            decay_factor = np.exp((reach_potential - reach_potential_max) * reach_decay)
+            return decay_factor / np.sqrt(count)
+            # reach_potential = scaled_dist(observation[..., obs_dict['reach_dist']], scale=0.8)
+            # reach_potential_max = 1.0
+            # goodness_decay = np.log(2) / 0.1
+            # goodness = np.exp((reach_potential - reach_potential_max) * goodness_decay)
+            # count_decay = np.log(2) / 1e4
+            # count_factor = np.exp(-count_decay * count)
+            # intrinsic_reward = goodness * count_factor
+            # return intrinsic_reward.item()
+
+        handle_exploration_params = ExplorationParams(features_extractor=features_extractor,
+                                                      feature_boundaries=features_boundaries,
+                                                      reward_func=intrinsic_reward_func,
+                                                      scale=5.0)
+    else:
+        handle_exploration_params = None
 
     # Option 3: Pull the door
     pull_default_action = np.zeros(7, dtype=np.float32)
@@ -191,6 +242,7 @@ def get_env_config():
         obs_dict['gripper_joints_vel'],
         obs_dict['handle_pos'],
         obs_dict['handle_to_eef_pos'],
+        obs_dict['hinge_qpos'],
         obs_dict['handle_qpos']
     ])
     pull_actor_params.action_mask = np.arange(6)
