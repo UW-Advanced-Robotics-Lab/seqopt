@@ -70,7 +70,7 @@ if __name__ == '__main__':
     # Continue training from a previous model
     if args.continue_training != '':
         # Both algorithms have the same function signature for loading
-        algo = algo_cls.load(args.continue_training, vec_env, env_config.device)
+        algo = algo_cls.load(args.continue_training, vec_env, algo_config.device)
     else:
         if args.algorithm == 'ppo':
             algo = algo_cls(
@@ -102,12 +102,12 @@ if __name__ == '__main__':
         else:
             raise ValueError(f"Invalid algorithm: '{args.algorithm}'")
 
-    # Add the options
-    for option_id in range(env_config.n_options):
-        algo.add_option(actor_params=env_config.actor_params[option_id],
-                        critic_params=env_config.critic_params[option_id],
-                        terminator_params=env_config.terminator_params[option_id],
-                        exploration_params=env_config.exploration_params[option_id])
+        # Add the options (only if training a fresh model, otherwise it loads parameters from before)
+        for option_id in range(env_config.n_options):
+            algo.add_option(actor_params=env_config.actor_params[option_id],
+                            critic_params=env_config.critic_params[option_id],
+                            terminator_params=env_config.terminator_params[option_id],
+                            exploration_params=env_config.exploration_params[option_id])
 
     # Lastly, we make a call to learn()
     if args.algorithm == 'ppo':

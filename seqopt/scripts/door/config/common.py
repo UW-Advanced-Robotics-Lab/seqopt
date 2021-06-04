@@ -153,17 +153,18 @@ def get_env_config():
     # We should try to close the gripper
     handle_default_action[-1] = 1.
     handle_actor_params = ActorParams(default_action=th.as_tensor(handle_default_action))
-    handle_actor_params.net_arch = [200, 200]
-    handle_actor_params.observation_mask = \
-        np.concatenate([
-            obs_dict['arm_joints_pos'],
-            obs_dict['arm_joints_vel'],
-            obs_dict['gripper_joints_pos'],
-            obs_dict['gripper_joints_vel'],
-            obs_dict['handle_to_eef_pos'],
-            obs_dict['handle_qpos']
-        ])
-    handle_actor_params.action_mask = np.arange(6)
+    # handle_actor_params.net_arch = [200, 200]
+    # handle_actor_params.observation_mask = \
+    #     np.concatenate([
+    #         obs_dict['arm_joints_pos'],
+    #         obs_dict['arm_joints_vel'],
+    #         obs_dict['gripper_joints_pos'],
+    #         obs_dict['gripper_joints_vel'],
+    #         obs_dict['handle_to_eef_pos'],
+    #         obs_dict['handle_qpos']
+    #     ])
+    # handle_actor_params.action_mask = np.arange(6)
+    handle_actor_params.action_mask = np.array([])
 
     handle_critic_params = CriticParams()
     handle_critic_params.net_arch = [300, 200]
@@ -231,9 +232,14 @@ def get_env_config():
         handle_exploration_params = None
 
     # Option 3: Pull the door
-    pull_default_action = np.zeros(7, dtype=np.float32)
-    pull_default_action[-1] = 1.
-    pull_actor_params = ActorParams(default_action=th.as_tensor(pull_default_action))
+    def pull_default_action(observations: th.Tensor):
+        return th.where(observations[..., obs_dict['grasped']].unsqueeze(dim=-1) == 1.0,
+                        th.Tensor([0., 0., 0., 0., 0., 0., 1.]),
+                        th.Tensor([0., 0., 0., 0., 0., 0., 0.])).squeeze()
+    # pull_default_action = np.zeros(7, dtype=np.float32)
+    # pull_default_action[-1] = 1.
+    # pull_actor_params = ActorParams(default_action=th.as_tensor(pull_default_action))
+    pull_actor_params = ActorParams(default_action=pull_default_action)
     pull_actor_params.net_arch = [200, 200]
     pull_actor_params.observation_mask = np.concatenate([
         obs_dict['arm_joints_pos'],

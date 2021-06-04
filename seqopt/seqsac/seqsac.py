@@ -840,10 +840,18 @@ class SequenceSAC(object):
         # Update the rest of the parameters of the model
         model.__dict__.update(data['cls'])
 
+        # We have to reinitialize the model with the correct parameters
+        model_params = model._params.copy()
+
+        # This needs to be reset since we are going to populate the params again through calling add_option()
+        model._params = []
+
         # Add the options
-        assert model.num_options == len(model._params), "Inconsistent number of options and parameters!"
+        assert model.num_options == len(model_params), "Inconsistent number of options and parameters!"
         for option_id in range(model.num_options):
-            model.add_option(**model._params[option_id])
+            model.add_option(**model_params[option_id])
+
+        print(f"Num options: {model.num_options}, Num params: {len(model._params)}")
 
         # Restore the state dicts
         for option_id in range(model.num_options):

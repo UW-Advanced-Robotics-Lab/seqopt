@@ -651,7 +651,8 @@ class Door(RobotEnv):
         Returns:
             np.array: Door handle (x,y,z)
         """
-        return self.sim.data.site_xpos[self.door_handle_site_id]
+        return self.sim.data.geom_xpos[self.sim.model.geom_name2id('handle')]
+        # return self.sim.data.site_xpos[self.door_handle_site_id]
 
     @property
     def _gripper_to_handle(self):
