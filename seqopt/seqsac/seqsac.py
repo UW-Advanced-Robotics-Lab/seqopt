@@ -1014,7 +1014,7 @@ class SequenceSAC(object):
                 reward_func=reward_func,
                 best_model_save_path=log_path,
                 deterministic_actions=True,
-                deterministic_transitions=True,
+                deterministic_transitions=False,
                 log_path=log_path,
                 eval_freq=eval_freq,
                 n_eval_episodes=n_eval_episodes,

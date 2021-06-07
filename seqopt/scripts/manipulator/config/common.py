@@ -60,29 +60,36 @@ def get_env_config():
                     obs: np.ndarray,
                     action: np.ndarray,
                     option_id: np.ndarray):
+        gamma = 1.0
         last_reach_dist, reach_dist = last_obs[..., obs_dict['reach_dist']], obs[..., obs_dict['reach_dist']]
         last_grasp_success, grasp_success = last_obs[..., obs_dict['grasped']], obs[..., obs_dict['grasped']]
         last_place_dist, place_dist = last_obs[..., obs_dict['place_dist']], obs[..., obs_dict['place_dist']]
 
         # Assign rewards based on the option engaged
-        reach_reward = _REACH_REWARD_COEF * (scaled_dist(reach_dist, scale=0.8) -
+        reach_reward = _REACH_REWARD_COEF * (gamma * scaled_dist(reach_dist, scale=0.8) -
                                              scaled_dist(last_reach_dist, scale=0.8))
-        grasp_reward = _GRASP_REWARD_COEF * (grasp_success - last_grasp_success) * scaled_dist(place_dist, scale=0.8)
-        place_reward = _PLACE_REWARD_COEF * last_grasp_success * (scaled_dist(place_dist, scale=0.8) -
-                                                                  scaled_dist(last_place_dist, scale=0.8))
+        grasp_reward = _GRASP_REWARD_COEF * (grasp_success - last_grasp_success) *\
+                       scaled_dist(last_place_dist, scale=0.8)
+        place_reward = _PLACE_REWARD_COEF * grasp_success * (gamma * scaled_dist(place_dist, scale=0.8) -
+                                                             scaled_dist(last_place_dist, scale=0.8))
+
+        # Determine the value of the rewards for all 'dense' reward options, what constitutes a reward that makes
+        # no net progress towards the task
+        reach_rew_thresh = _REACH_REWARD_COEF * (gamma - 1) * scaled_dist(last_reach_dist, scale=0.8)
+        place_rew_thresh = _PLACE_REWARD_COEF * (gamma - 1) * grasp_success * scaled_dist(last_place_dist, scale=0.8)
 
         if len(option_id.shape) < 2:
             option_id = np.expand_dims(option_id, axis=-1)
 
         rew = \
             np.where(option_id == 0,
-                     reach_reward + np.clip(grasp_reward, None, 0.) + np.clip(place_reward, None, 0.),
+                     reach_reward + np.clip(grasp_reward, None, 0.) + np.clip(place_reward, None, place_rew_thresh),
                      0.) +\
             np.where(option_id == 1,
-                     grasp_reward + np.clip(reach_reward, None, 0.) + np.clip(place_reward, None, 0.),
+                     grasp_reward + np.clip(reach_reward, None, reach_rew_thresh) + np.clip(place_reward, None, place_rew_thresh),
                      0.) +\
             np.where(option_id == 2,
-                     place_reward + np.clip(grasp_reward, None, 0.) + np.clip(reach_reward, None, 0.),
+                     place_reward + np.clip(grasp_reward, None, 0.) + np.clip(reach_reward, None, reach_rew_thresh),
                      0.)
 
         return rew

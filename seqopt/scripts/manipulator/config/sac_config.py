@@ -84,7 +84,7 @@ ENV_CONFIG.terminator_params[1].update(
 ENV_CONFIG.terminator_params[2].update(
     dict(
         lr_schedule=5e-7,
-        ent_coef=5e-1
+        ent_coef=0.0    # Don't do any entropy regularization for last option. We want to stick with it at the end
     )
 )
 
