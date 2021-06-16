@@ -22,7 +22,11 @@ def evaluate_policy(
     callback: Optional[Callable] = None,
     reward_threshold: Optional[float] = None,
     return_episode_rewards: bool = False,
-) -> Union[Tuple[float, float], Tuple[List[float], List[int]]]:
+    return_options_used: bool = False
+) -> Union[Tuple[float, float],
+           Tuple[List[float], List[int]],
+           Tuple[float, float, List[List[int]]],
+           Tuple[List[float], List[int], List[List[int]]]]:
     """
     Runs policy for ``n_eval_episodes`` episodes and returns average reward.
     This is made to work only with one env.
@@ -60,6 +64,7 @@ def evaluate_policy(
     active_option = 0
 
     episode_rewards, episode_lengths = [], []
+    options_used = [[] for _ in range(n_eval_episodes)]
     for i in range(n_eval_episodes):
         # Avoid double reset, as VecEnv are reset automatically
         if not isinstance(env, VecEnv) or i == 0:
@@ -73,7 +78,9 @@ def evaluate_policy(
                 action = model.sample_action(active_option,
                                              obs_tensor,
                                              deterministic=deterministic_actions)
+                # print(f"Action log prob: {model.action_log_prob(active_option, obs_tensor)[1]}")
             clipped_actions = np.clip(action.cpu().numpy(), env.action_space.low, env.action_space.high)
+            # print(f"Action: {clipped_actions}")
             if len(clipped_actions.shape) == 1:
                 clipped_actions = np.expand_dims(clipped_actions, 0)
             new_obs, _, dones, infos = env.step(clipped_actions)
@@ -90,6 +97,7 @@ def evaluate_policy(
                                  curr_obs,
                                  clipped_actions,
                                  np.array([[active_option]])).squeeze()
+            options_used[i].append(active_option)
             # with th.no_grad():
             #     q_vals = []
             #     obs_tensor = th.as_tensor(obs)
@@ -154,6 +162,12 @@ def evaluate_policy(
         assert mean_reward > reward_threshold,\
             "Mean reward below threshold: " f"{mean_reward:.2f} < {reward_threshold:.2f}"
     if return_episode_rewards:
-        return episode_rewards, episode_lengths
+        if not return_options_used:
+            return episode_rewards, episode_lengths
+        else:
+            return episode_rewards, episode_lengths, options_used
 
-    return mean_reward, std_reward
+    if not return_options_used:
+        return mean_reward, std_reward
+    else:
+        return mean_reward, std_reward, options_used
