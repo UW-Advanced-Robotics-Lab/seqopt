@@ -30,7 +30,8 @@ def get_env_config():
         has_offscreen_renderer=False,
         use_camera_obs=False,
         control_freq=10,
-        gripper_visualizations=True
+        gripper_visualizations=True,
+        horizon=500
     )
 
     # Define the observations
@@ -82,12 +83,12 @@ def get_env_config():
         # Assign rewards based on the option engaged
         reach_reward = _REACH_REWARD_COEF * (scaled_dist(reach_dist, scale=0.8) -
                                              scaled_dist(last_reach_dist, scale=0.8))
-        grasp_reward = _GRASP_REWARD_COEF * (grasped - last_grasped) * (scaled_dist(handle_angle, scale=3.0) +
-                                                                          scaled_dist(door_angle, scale=0.8))
-        door_reward = _OPEN_DOOR_REWARD_COEF * last_grasped * ((scaled_dist(handle_angle, scale=3.0) +
-                                                                scaled_dist(door_angle, scale=0.8)) -
-                                                               (scaled_dist(last_handle_angle, scale=3.0) +
-                                                                scaled_dist(last_door_angle, scale=0.8)))
+        grasp_reward = _GRASP_REWARD_COEF * (grasped - last_grasped) * (scaled_dist(last_handle_angle, scale=3.0) +
+                                                                        scaled_dist(last_door_angle, scale=0.8))
+        door_reward = _OPEN_DOOR_REWARD_COEF * grasped * ((scaled_dist(handle_angle, scale=3.0) +
+                                                           scaled_dist(door_angle, scale=0.8)) -
+                                                          (scaled_dist(last_handle_angle, scale=3.0) +
+                                                           scaled_dist(last_door_angle, scale=0.8)))
         if len(option_id.shape) < 2:
             option_id = np.expand_dims(option_id, axis=-1)
 
@@ -197,24 +198,26 @@ def get_env_config():
 
         # For distance-based boundary, we will create evenly-spaced values on the log distance scale between
         # 0.01 - 0.1 m (values outside these ranges are pretty meaningless w.r.t the task, so we can bin them together)
-        dist_boundaries = th.pow(2, th.linspace(-4, -2, steps=10))
+        dist_boundaries = th.pow(2, th.linspace(-5, -3, steps=10))
 
         # The angle bounds are evenly spread in 10 degree intervals (it's the same for all of roll, pitch and yaw angles)
         # step_size = np.pi / 18
         # angle_boundaries = th.arange(-np.pi + step_size, np.pi, step_size)
 
         # Gripper bounds (for fingertip dist)
-        step_size = 1.51 / 5
+        step_size = 1.51 / 10
         gripper_boundaries = th.arange(step_size, 1.51 + step_size, step_size)
         features_boundaries = [dist_boundaries, gripper_boundaries]
 
         # Define the intrinsic reward function
         def intrinsic_reward_func(observation: np.ndarray, count: int) -> np.float32:
-            reach_potential = scaled_dist(observation[..., obs_dict['reach_dist']], scale=0.8)
-            reach_potential_max = 1.0
-            reach_decay = np.log(2) / 0.2
-            decay_factor = np.exp((reach_potential - reach_potential_max) * reach_decay)
-            return decay_factor / np.sqrt(count)
+            return 1.0 / np.sqrt(count)
+            # reach_potential = scaled_dist(observation[..., obs_dict['reach_dist']], scale=0.8)
+            # reach_potential_max = 1.0
+            # reach_decay = np.log(2) / 0.2
+            # decay_factor = np.exp((reach_potential - reach_potential_max) * reach_decay)
+            # return decay_factor / np.sqrt(count)
+
             # reach_potential = scaled_dist(observation[..., obs_dict['reach_dist']], scale=0.8)
             # reach_potential_max = 1.0
             # goodness_decay = np.log(2) / 0.1
