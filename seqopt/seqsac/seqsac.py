@@ -548,6 +548,9 @@ class SequenceSAC(object):
         else:
             critic_acts = self.mask(replay_data.actions, self.actor_act_masks[option_id])
 
+        # Compute termination probability for the current option in the next states
+        _, termination_prob_ = self.sample_termination(option_id, replay_data.next_observations)
+
         # Compute Q-values/Targets based on interactions for next timestep
         with th.no_grad():
             # Select action according to current and next option policy
@@ -564,13 +567,15 @@ class SequenceSAC(object):
                                           dim=1)
             next_option_q_values, _ = th.min(next_option_q_values, dim=1, keepdim=True)
 
-            # Compute termination probability for the current option in the next states
-            _, termination_prob = self.sample_termination(option_id, replay_data.next_observations)
+            # Store the next observation-action q-values for the current option and the next option
+            # This will be re-used in the calculation of termination losses
+            min_qf_pi_, min_next_option_qf_pi_ = next_q_values.clone(), next_option_q_values.clone()
 
             # add entropy term (this effective calculates the value function; not the "q-value")
             next_q_values = next_q_values - actor_ent_coef * next_log_prob.reshape(-1, 1)
             next_option_q_values = next_option_q_values - next_actor_ent_coef * next_option_log_prob.reshape(-1, 1)
 
+            termination_prob = termination_prob_.clone().detach()
             # td error + entropy term
             target_q_values = replay_data.rewards.unsqueeze(dim=-1) +\
                               (1 - replay_data.dones.unsqueeze(dim=-1)) * self.gamma *\
@@ -605,7 +610,6 @@ class SequenceSAC(object):
         # Mean over all critic networks
         q_values_pi = th.cat(critic.forward(critic_obs, actions_pi), dim=1)
         min_qf_pi, _ = th.min(q_values_pi, dim=1, keepdim=True)
-        min_qf_pi_ = min_qf_pi.clone().detach()     # This value will be reused in the termination loss computation
         if actor is not None:
             sample_actor_losses = actor_ent_coef * log_prob - min_qf_pi
             if num_demo_samples == 0:
@@ -628,18 +632,9 @@ class SequenceSAC(object):
         # Compute terminator loss
         # We don't need to backpropagate through the value estimates since it doesn't explicitly depend on the
         # termination policy
-        # TODO(someshdaga): We use replay_data.observations here, but we should really calculate the losses
-        #                   over replay_data.next_observations. May not make a significant difference since we
-        #                   can typically expect the distribution of both to approximately be the same
-        with th.no_grad():
-            next_option_actions_pi, _ = self.action_log_prob(next_option_id, replay_data.observations)
-            next_option_q_values_pi = th.cat(next_critic.forward(next_critic_obs, next_option_actions_pi), dim=1)
-            min_next_option_qf_pi, _ = th.min(next_option_q_values_pi, dim=1, keepdim=True)
-        _, termination_prob = self.sample_termination(option_id, replay_data.observations)
-        # TODO(someshdaga): I think we should use the same terminator_ent_coef in both terms
         sample_terminator_losses =\
-            ((1.0 - termination_prob) * (terminator_ent_coef * th.log(1.0 - termination_prob) - min_qf_pi_) +
-             termination_prob * (next_terminator_ent_coef * th.log(termination_prob) - min_next_option_qf_pi))
+            ((1.0 - termination_prob_) * (terminator_ent_coef * th.log(1.0 - termination_prob_) - min_qf_pi_) +
+             termination_prob_ * (terminator_ent_coef * th.log(termination_prob_) - min_next_option_qf_pi_))
         if num_demo_samples == 0:
             terminator_loss = sample_terminator_losses.mean()
             loss_dict['terminator_loss'] = terminator_loss.item()
@@ -851,8 +846,6 @@ class SequenceSAC(object):
         for option_id in range(model.num_options):
             model.add_option(**model_params[option_id])
 
-        print(f"Num options: {model.num_options}, Num params: {len(model._params)}")
-
         # Restore the state dicts
         for option_id in range(model.num_options):
             # Load actor state dicts
@@ -1014,7 +1007,7 @@ class SequenceSAC(object):
                 reward_func=reward_func,
                 best_model_save_path=log_path,
                 deterministic_actions=True,
-                deterministic_transitions=False,
+                deterministic_transitions=True,
                 log_path=log_path,
                 eval_freq=eval_freq,
                 n_eval_episodes=n_eval_episodes,
