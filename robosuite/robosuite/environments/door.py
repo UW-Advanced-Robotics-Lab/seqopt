@@ -374,20 +374,6 @@ class Door(RobotEnv):
             di['reach_dist'] = np.array([np.linalg.norm(di[pr + "handle_to_eef_pos"])])
             di['gripper_euler_angles'] = Rotation.from_quat(di[pr + 'eef_quat']).as_euler('xyz')
 
-            # gripper_geom_groups = [['gripper0_thumb_proximal_collision',
-            #                         'gripper0_thumb_distal_collision',
-            #                         'gripper0_thumb_pad_collision'],
-            #                        ['gripper0_index_proximal_collision',
-            #                         'gripper0_index_distal_collision',
-            #                         'gripper0_index_pad_collision'],
-            #                        ['gripper0_pinky_proximal_collision',
-            #                         'gripper0_pinky_distal_collision',
-            #                         'gripper0_pinky_pad_collision']]
-            #
-            # grasped = np.array([np.float32(self._check_grasp(gripper_geom_groups, 'handle'))])
-            # self._check_handle_grasp()
-            # di['grasped'] = grasped
-
             # Get the average angle of the finger joints (only the first part of all fingers)
             joint_names = ['gripper0_joint_thumb', 'gripper0_joint_index', 'gripper0_joint_pinky']
             joint_ids = [self.sim.model.joint_name2id(jnt) for jnt in joint_names]
@@ -395,7 +381,9 @@ class Door(RobotEnv):
             di['fingertip_dist'] = np.array([fingertip_dist])
 
             # Check if handle is grasped
-            grasped = np.array([np.float32((fingertip_dist < 0.5) and self._check_handle_in_grasp())])
+            # print(f"Handle inside grasp: {self._check_handle_in_grasp()}, "
+            #       f"Fingertips closed enough ({fingertip_dist}): {(fingertip_dist < 0.55)}")
+            grasped = np.array([np.float32((fingertip_dist < 0.55) and self._check_handle_in_grasp())])
             di['grasped'] = grasped
 
             di['object-state'] = np.concatenate([
@@ -432,7 +420,10 @@ class Door(RobotEnv):
         # Get the position (center) of the handle and the orientation of the handle in world coordinates
         handle_xpos = self.sim.data.geom_xpos[handle_id]
         handle_xmat = self.sim.data.geom_xmat[handle_id].reshape(3, 3)
-        handle_size = self.sim.model.geom_size[handle_id]
+        handle_size_ = self.sim.model.geom_size[handle_id]
+
+        # Inflate handle sizes by 10% (as a margin)
+        handle_size = 1.0 * handle_size_.copy()
 
         # Get the corners of the cuboid representing the handle (there should be 8 values)
         assert len(handle_size) == 3, 'Expected a box shape for handle! Got something else!'
@@ -458,17 +449,26 @@ class Door(RobotEnv):
         end_effector_pos = self.sim.data.site_xpos[eef_site_id]
         palm_site_id = self.sim.model.site_name2id('gripper0_ft_frame')
         palm_pos = self.sim.data.site_xpos[palm_site_id]
+        # line = np.vstack([end_effector_pos - .1 * (palm_pos - end_effector_pos), palm_pos])
         line = np.vstack([end_effector_pos, palm_pos])
 
         # Check if at least 2 faces are intersected by the line
         n_faces_intersected = 0
         for face_id in range(len(faces)):
             if self._intersect(line, faces[face_id]):
+                # if face_id == 0:
+                #     print("intersected front face")
+                # elif face_id == 1:
+                #     print("intersected top face")
+                # elif face_id == 2:
+                #     print("intersected back face")
+                # else:
+                #     print("intersected bottom face")
                 n_faces_intersected += 1
             if n_faces_intersected >= 2:
                 # print(f"Handle inside end-effector grasp")
                 return True
-
+        # print(f"Num faces intersected: {n_faces_intersected}")
         return False
 
     def _intersect(self, line_pts, plane_pts):
@@ -481,6 +481,7 @@ class Door(RobotEnv):
         line_plane_dotp = np.dot(line_vector, normal_vector)
         # We want to ensure that the normal vector points in the same half-space as the line vector
         if line_plane_dotp < 0:
+            line_plane_dotp *= -1
             normal_vector *= -1
 
         # They intersect (at least for infinitely long objects) as long as the line vector and normal vector
