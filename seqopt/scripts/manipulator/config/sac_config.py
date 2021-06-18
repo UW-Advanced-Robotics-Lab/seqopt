@@ -50,40 +50,40 @@ ENV_CONFIG.actor_params[2].update(
 # Update critic parameters
 ENV_CONFIG.critic_params[0].update(
     dict(
-        lr_schedule=3e-4,
+        lr_schedule=1e-7,
     )
 )
 
 ENV_CONFIG.critic_params[1].update(
     dict(
-        lr_schedule=3e-4
+        lr_schedule=1e-7
     )
 )
 
 ENV_CONFIG.critic_params[2].update(
     dict(
-        lr_schedule=3e-4
+        lr_schedule=1e-7
     )
 )
 
 # Update terminator parameters
 ENV_CONFIG.terminator_params[0].update(
     dict(
-        lr_schedule=5e-7,
+        lr_schedule=5e-8,
         ent_coef=5e-1
     )
 )
 
 ENV_CONFIG.terminator_params[1].update(
     dict(
-        lr_schedule=5e-7,
+        lr_schedule=5e-8,
         ent_coef=5e-1
     )
 )
 
 ENV_CONFIG.terminator_params[2].update(
     dict(
-        lr_schedule=5e-7,
+        lr_schedule=5e-8,
         ent_coef=0.0    # Don't do any entropy regularization for last option. We want to stick with it at the end
     )
 )
@@ -111,7 +111,7 @@ ALGORITHM_CONFIG = SACConfig(
     log_interval=1,
     train_freq=1,
     save_freq=20000,
-    eval_freq=20000,
+    eval_freq=10000,
     gradient_steps=1,
     n_episodes_rollout=-1,
     learning_starts=100,
