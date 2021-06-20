@@ -99,6 +99,8 @@ class SequenceSAC(object):
         self.actors = []
         self.critics = []
         self.critic_targets = []
+        self.option_critics = []
+        self.option_critic_targets = []
         self.taus = []
         self.target_update_intervals = []
         self.terminators = []
@@ -197,6 +199,17 @@ class SequenceSAC(object):
         critic.optimizer = critic_params.optimizer_class(critic.parameters(),
                                                          lr=critic_params.lr_schedule,
                                                          **critic_params.optimizer_kwargs)
+        option_critic = ContinuousCritic(observation_space=critic_obs_space,
+                                         action_space=None,
+                                         net_arch=critic_params.net_arch if critic_params.net_arch is not None else [256, 256],
+                                         features_extractor=features_extractor,
+                                         features_dim=features_extractor.features_dim,
+                                         activation_fn=critic_params.activation_fn,
+                                         output_activation_fn=critic_params.output_activation_fn,
+                                         n_critics=critic_params.n_critics).to(self.device)
+        option_critic.optimizer = critic_params.optimizer_class(option_critic.parameters(),
+                                                                lr=critic_params.lr_schedule,
+                                                                **critic_params.optimizer_kwargs)
 
         critic_target =\
             ContinuousCritic(observation_space=critic_obs_space,
@@ -206,10 +219,21 @@ class SequenceSAC(object):
                              features_dim=features_extractor.features_dim,
                              activation_fn=critic_params.activation_fn,
                              n_critics=critic_params.n_critics).to(self.device)
+        option_critic_target =\
+            ContinuousCritic(observation_space=critic_obs_space,
+                             action_space=None,
+                             net_arch=critic_params.net_arch if critic_params.net_arch is not None else [256, 256],
+                             features_extractor=features_extractor,
+                             features_dim=features_extractor.features_dim,
+                             activation_fn=critic_params.activation_fn,
+                             n_critics=critic_params.n_critics).to(self.device)
         critic_target.load_state_dict(critic.state_dict())
+        option_critic_target.load_state_dict(option_critic.state_dict())
 
         self.critics.append(critic)
         self.critic_targets.append(critic_target)
+        self.option_critics.append(option_critic)
+        self.option_critic_targets.append(option_critic_target)
         self.critic_obs_masks.append(critic_params.observation_mask)
         self.taus.append(critic_params.tau)
         self.target_update_intervals.append(critic_params.target_update_interval)
@@ -478,6 +502,8 @@ class SequenceSAC(object):
     def train(self, option_id: int, gradient_steps: int, batch_size: int = 64) -> None:
         critic = self.critics[option_id]
         critic_target = self.critic_targets[option_id]
+        option_critic = self.option_critics[option_id]
+        option_critic_target = self.option_critic_targets[option_id]
 
         loss_dicts = []
         for gradient_step in range(gradient_steps):
@@ -501,6 +527,7 @@ class SequenceSAC(object):
             # Update target networks
             if gradient_step % self.target_update_intervals[option_id] == 0:
                 polyak_update(critic.parameters(), critic_target.parameters(), self.taus[option_id])
+                polyak_update(option_critic.parameters(), option_critic_target.parameters(), self.taus[option_id])
 
         # Log info
         # NOTE: It should be safe to assume all loss dicts have the same keys
@@ -510,6 +537,47 @@ class SequenceSAC(object):
 
         if self.demo_replay_buffer is not None:
             logger.record(f"train/lam", self._demo_learning_schedule(self._current_progress_remaining))
+
+    # def get_option_values(self,
+    #                       obs: th.Tensor,
+    #                       option_list: Optional[List] = None,
+    #                       use_target_networks: bool = False) -> th.Tensor:
+    #     # If no option list is provided, we will get the values for all options
+    #     if option_list is None:
+    #         option_list = [opt for opt in range(self.num_options)]
+    #
+    #     # Store the critics or critic target networks used to compute values, in a list
+    #     if use_target_networks:
+    #         critic_nets = [self.critic_targets[opt] for opt in option_list]
+    #     else:
+    #         critic_nets = [self.critics[opt] for opt in option_list]
+    #
+    #     all_option_vals = []
+    #     for option_id, critic_net in zip(option_list, critic_nets):
+    #         # Convert the observation into the form expected by the critic network(s)
+    #         critic_obs = self.mask(obs, self.critic_obs_masks[option_id])
+    #
+    #         # Sample an action from the associated option and get the action log prob
+    #         actions_pi, log_prob = self.action_log_prob(option_id, obs)
+    #         actor = self.actors[option_id]
+    #         actor_ent_coef = self.actor_ent_coefs[option_id]
+    #
+    #         # Convert any action(s) into the form expected by the critic network(s)
+    #         if actor is None:
+    #             critic_acts = None
+    #         else:
+    #             critic_acts = self.mask(actions_pi, self.actor_act_masks[option_id])
+    #
+    #         # Compute Q(s,a,o) from the critic network(s) (we take the min value for stability)
+    #         q_values = th.cat(critic_net(critic_obs, critic_acts), dim=1)
+    #         min_q_values, _ = th.min(q_values, dim=1, keepdim=True)
+    #
+    #         # Calculate Q(s,o) by accounting for the action entropy i.e. Q(s,o) = Q(s,a,o) - ent_coef * log pi(a)
+    #         option_vals = min_q_values - actor_ent_coef * log_prob.reshape(-1, 1)
+    #         all_option_vals.append(option_vals)
+    #
+    #     # We stack the option values for each option horizontally i.e. Num obs x Num options tensor size
+    #     return th.hstack(all_option_vals)
 
     def get_option_values(self,
                           obs: th.Tensor,
@@ -521,33 +589,20 @@ class SequenceSAC(object):
 
         # Store the critics or critic target networks used to compute values, in a list
         if use_target_networks:
-            critic_nets = [self.critic_targets[opt] for opt in option_list]
+            critic_nets = [self.option_critic_targets[opt] for opt in option_list]
         else:
-            critic_nets = [self.critics[opt] for opt in option_list]
+            critic_nets = [self.option_critics[opt] for opt in option_list]
 
         all_option_vals = []
         for option_id, critic_net in zip(option_list, critic_nets):
             # Convert the observation into the form expected by the critic network(s)
             critic_obs = self.mask(obs, self.critic_obs_masks[option_id])
 
-            # Sample an action from the associated option and get the action log prob
-            actions_pi, log_prob = self.action_log_prob(option_id, obs)
-            actor = self.actors[option_id]
-            actor_ent_coef = self.actor_ent_coefs[option_id]
-
-            # Convert any action(s) into the form expected by the critic network(s)
-            if actor is None:
-                critic_acts = None
-            else:
-                critic_acts = self.mask(actions_pi, self.actor_act_masks[option_id])
-
-            # Compute Q(s,a,o) from the critic network(s) (we take the min value for stability)
-            q_values = th.cat(critic_net(critic_obs, critic_acts), dim=1)
+            # Compute Q(s,a,o) from the option critic network(s) (we take the min value for stability)
+            q_values = th.cat(critic_net(critic_obs, None), dim=1)
             min_q_values, _ = th.min(q_values, dim=1, keepdim=True)
 
-            # Calculate Q(s,o) by accounting for the action entropy i.e. Q(s,o) = Q(s,a,o) - ent_coef * log pi(a)
-            option_vals = min_q_values - actor_ent_coef * log_prob.reshape(-1, 1)
-            all_option_vals.append(option_vals)
+            all_option_vals.append(min_q_values)
 
         # We stack the option values for each option horizontally i.e. Num obs x Num options tensor size
         return th.hstack(all_option_vals)
@@ -587,6 +642,7 @@ class SequenceSAC(object):
         actor = self.actors[option_id]
         terminator = self.terminators[option_id]
         critic, next_critic = self.critics[option_id], self.critics[next_option_id]
+        option_critic, next_option_critic = self.option_critics[option_id], self.option_critics[next_option_id]
         critic_target, next_critic_target = self.critic_targets[option_id], self.critic_targets[next_option_id]
         actor_ent_coef, next_actor_ent_coef = self.actor_ent_coefs[option_id], self.actor_ent_coefs[next_option_id]
         terminator_ent_coef, next_terminator_ent_coef = self.terminator_ent_coefs[option_id],\
@@ -700,14 +756,48 @@ class SequenceSAC(object):
         th.nn.utils.clip_grad_norm_(critic.parameters(), 0.5)
         critic.optimizer.step()
 
+        # Compute option critic loss
+        # Calculate minimum of Q(s,a,o) using the target networks
+        action_q_values, _ = th.min(th.cat(critic(critic_obs, critic_acts), dim=1),
+                                    keepdim=True,
+                                    dim=1)
+        # with th.no_grad():
+        #     action_q_values, _ = th.min(th.cat(critic_target(critic_obs, critic_acts), dim=1),
+        #                                 keepdim=True,
+        #                                 dim=1)
+        # Calculate Q(s,o) from the online network
+        option_values = self.option_critics[option_id](critic_obs, None)
+        if num_demo_samples == 0:
+            target_q = action_q_values.clone().detach() - actor_ent_coef * log_prob.clone().detach()
+            option_critic_loss = 0.5 * sum([F.mse_loss(opt_q, target_q) for opt_q in option_values])
+            loss_dict['option_critic_loss'] = option_critic_loss.item()
+        else:
+            rl_critic_loss = 0.5 * sum([F.mse_loss(current_q[:-num_demo_samples], target_q_values[:-num_demo_samples])
+                                        for current_q in current_q_values])
+            demo_critic_loss = 0.5 * sum([F.mse_loss(current_q[num_demo_samples:], target_q_values[num_demo_samples:])
+                                          for current_q in current_q_values])
+            option_critic_loss = rl_critic_loss + lam * demo_critic_loss
+            loss_dict['rl_option_critic_loss'] = rl_critic_loss.item()
+            loss_dict['demo_option_critic_loss'] = demo_critic_loss.item()
+            loss_dict['option_critic_loss'] = option_critic_loss.item()
+
+        # Optimize the option critic
+        option_critic.optimizer.zero_grad()
+        option_critic_loss.backward()
+        th.nn.utils.clip_grad_norm_(option_critic.parameters(), 0.5)
+        option_critic.optimizer.step()
+
         # Compute actor loss
         # Alternative: actor_loss = th.mean(log_prob - qf1_pi)
         # Mean over all critic networks
-        q_values_pi = th.cat(critic(critic_obs, actions_pi), dim=1)
-        min_qf_pi, _ = th.min(q_values_pi, dim=1, keepdim=True)
+        # q_values_pi = th.cat(critic(critic_obs, actions_pi), dim=1)
+        # min_qf_pi, _ = th.min(q_values_pi, dim=1, keepdim=True)
+        # action_q_values, _ = th.min(th.cat(critic(critic_obs, critic_acts), dim=1),
+        #                             keepdim=True,
+        #                             dim=1)
         if actor is not None:
-            # The actor losses is equal to (-)Q(s,o) i.e. we want to maximize Q(s,o) = Q(s,a,o) - ent_coef * log pi(a)
-            sample_actor_losses = actor_ent_coef * log_prob - min_qf_pi
+            # The actor losses is equal to (-)Q(s,o) i.e. we want to maximize Q(s,o) = Q(s,a,o) - actor_ent_coef * log pi(a)
+            sample_actor_losses = actor_ent_coef * log_prob - action_q_values
             if num_demo_samples == 0:
                 actor_loss = sample_actor_losses.mean()
                 loss_dict['actor_loss'] = actor_loss.item()
@@ -957,6 +1047,11 @@ class SequenceSAC(object):
             model.critic_targets[option_id].load_state_dict(critic_dict['target_params'])
             model.critics[option_id].optimizer.load_state_dict(critic_dict['optimizer'])
 
+            option_critic_dict = params['option_critics'][option_id]
+            model.option_critics[option_id].load_state_dict(option_critic_dict['params'])
+            model.option_critic_targets[option_id].load_state_dict(option_critic_dict['target_params'])
+            model.option_critics[option_id].optimizer.load_state_dict(option_critic_dict['optimizer'])
+
             # Load terminator state dicts
             terminator_dict = params['terminators'][option_id]
             model.terminators[option_id].load_state_dict(terminator_dict['params'])
@@ -986,6 +1081,8 @@ class SequenceSAC(object):
             "actors",
             "critics",
             "critic_targets",
+            "option_critics",
+            "option_critic_targets",
             "taus",
             "target_update_intervals",
             "terminators",
@@ -1026,7 +1123,7 @@ class SequenceSAC(object):
             data['cls'].pop(param_name, None)
 
         # Save the state_dicts() of all policies, critics, terminators, state counters and optimizers
-        state_dicts = dict(actors=[], critics=[], terminators=[], state_counters=[])
+        state_dicts = dict(actors=[], critics=[], option_critics=[], terminators=[], state_counters=[])
         for option_id in range(self.num_options):
             # Store actor network and optimizer state dicts
             if self.actors[option_id] is not None:
@@ -1045,6 +1142,14 @@ class SequenceSAC(object):
                     params=self.critics[option_id].state_dict(),
                     target_params=self.critic_targets[option_id].state_dict(),
                     optimizer=self.critics[option_id].optimizer.state_dict()
+                )
+            )
+
+            state_dicts['option_critics'].append(
+                dict(
+                    params=self.option_critics[option_id].state_dict(),
+                    target_params=self.option_critic_targets[option_id].state_dict(),
+                    optimizer=self.option_critics[option_id].optimizer.state_dict()
                 )
             )
 
