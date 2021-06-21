@@ -660,144 +660,97 @@ class SequenceSAC(object):
             num_demo_samples = 0
             lam = 0.0
 
-        # Actions by the current actor for the sampled states
+        # Mask the observation to that expected by the critic
+        critic_obs = self.mask(replay_data.observations, self.critic_obs_masks[option_id])
+        # Sample actions from current policy of the given option (these should already be masked)
         actions_pi, log_prob = self.action_log_prob(option_id, replay_data.observations)
         log_prob = log_prob.reshape(-1, 1)
 
-        # Break down the action/observation for the critics if action/observation masks need to be applied
-        critic_obs = self.mask(replay_data.observations, self.critic_obs_masks[option_id])
-        if actor is None:
-            critic_acts = None
-        else:
-            critic_acts = self.mask(replay_data.actions, self.actor_act_masks[option_id])
-
-        # Compute termination probability for the current option in the next states
-        _, termination_prob_ = self.sample_termination(option_id, replay_data.next_observations)
-
-        # Calculate the termination entropy
-        termination_ent_ = -(termination_prob_ * th.log(termination_prob_) +
-                             (1.0 - termination_prob_) * th.log(1.0 - termination_prob_)) * terminator_ent_coef
-
-
+        # Update Option-Values Q(s,o)
+        # ----------------------------
         with th.no_grad():
-            # Clone the termination probability and termination entropy for the current option (calculated above)
-            termination_prob = termination_prob_.clone().detach()
-            termination_ent = termination_ent_.clone().detach()
+            # Get (min) values of Q(s,a,o) from target network
+            q_vals = th.cat(critic_target(critic_obs, actions_pi), dim=1)
+            min_q_vals, _ = th.min(q_vals, keepdim=True, dim=1)
 
-            # We need to calculate Q(s',o) -and- either Q(s',o') or V(s') [former if using chained model, latter if not]
-            # These values need to be obtained using the target networks for the purpose of computing targets for
-            # training the critics, and from the primary networks for the purpose of training the termination conditions
-            if self.use_chained_model:
-                option_vals = self.get_option_values(replay_data.next_observations,
-                                                     option_list=[option_id, next_option_id],
-                                                     use_target_networks=False)
-                target_option_vals = self.get_option_values(replay_data.next_observations,
-                                                            option_list=[option_id, next_option_id],
-                                                            use_target_networks=True)
+            target_option_values = min_q_vals - actor_ent_coef * log_prob
 
-                curr_opt_q = target_option_vals[..., 0].unsqueeze(dim=-1)
-                next_opt_q = target_option_vals[..., 1].unsqueeze(dim=-1)
+        # Get current estimates of Q(s,o)
+        estimated_option_values = self.option_critics[option_id](critic_obs, None)
 
-                # To be used later for terminator losses
-                continue_vals = option_vals[..., 0].unsqueeze(dim=-1)
-                terminate_vals = option_vals[..., 1].unsqueeze(dim=-1)
-
-                target_q_values = replay_data.rewards.unsqueeze(dim=-1) + \
-                                  (1 - replay_data.dones.unsqueeze(dim=-1)) * self.gamma * \
-                                  ((1 - termination_prob) * curr_opt_q + termination_prob * next_opt_q +
-                                   termination_ent)
-            else:
-                # Fetch all option values Q(s,o) for all options
-                option_vals = self.get_option_values(replay_data.next_observations,
-                                                     use_target_networks=False)
-                target_option_vals = self.get_option_values(replay_data.next_observations,
-                                                            use_target_networks=True)
-                # Get probabilities of all options
-                option_probs = self.get_softmax_vals(option_vals)
-                target_option_probs = self.get_softmax_vals(target_option_vals)
-
-                curr_opt_q = target_option_vals[..., option_id].unsqueeze(-1)
-                target_vf = th.einsum('ij,ij->i', target_option_vals, target_option_probs).unsqueeze(-1)
-
-                # To be used later for terminator losses
-                continue_vals = option_vals[..., option_id].unsqueeze(-1)
-                terminate_vals = th.einsum('ij,ij->i', option_vals, option_probs).unsqueeze(-1)
-
-                # TODO(someshdaga): Check if the termination entropy makes sense here
-                #                   For the un-chained model, the agent might probably try to always
-                #                   move the termination probabilities to 0.5, since it can choose the same
-                #                   option again using the policy over options
-                target_q_values = replay_data.rewards.unsqueeze(dim=-1) + \
-                                  (1 - replay_data.dones.unsqueeze(dim=-1)) * self.gamma * \
-                                  ((1 - termination_prob) * curr_opt_q + termination_prob * target_vf +
-                                   termination_ent)
-
-        # Get current Q(s,a,o) estimates from the critic of the current option
-        # using action from the replay buffer
-        current_q_values = critic(critic_obs, critic_acts)
-
-        # Compute critic loss
+        # Calculate loss and optimize
         if num_demo_samples == 0:
-            critic_loss = 0.5 * sum([F.mse_loss(current_q, target_q_values) for current_q in current_q_values])
-            loss_dict['critic_loss'] = critic_loss.item()
-        else:
-            rl_critic_loss = 0.5 * sum([F.mse_loss(current_q[:-num_demo_samples], target_q_values[:-num_demo_samples])
-                                        for current_q in current_q_values])
-            demo_critic_loss = 0.5 * sum([F.mse_loss(current_q[num_demo_samples:], target_q_values[num_demo_samples:])
-                                        for current_q in current_q_values])
-            critic_loss = rl_critic_loss + lam * demo_critic_loss
-            loss_dict['rl_critic_loss'] = rl_critic_loss.item()
-            loss_dict['demo_critic_loss'] = demo_critic_loss.item()
-            loss_dict['critic_loss'] = critic_loss.item()
-
-        # Optimize the critic
-        critic.optimizer.zero_grad()
-        critic_loss.backward()
-        th.nn.utils.clip_grad_norm_(critic.parameters(), 0.5)
-        critic.optimizer.step()
-
-        # Compute option critic loss
-        # Calculate minimum of Q(s,a,o) using the target networks
-        action_q_values, _ = th.min(th.cat(critic(critic_obs, critic_acts), dim=1),
-                                    keepdim=True,
-                                    dim=1)
-        # with th.no_grad():
-        #     action_q_values, _ = th.min(th.cat(critic_target(critic_obs, critic_acts), dim=1),
-        #                                 keepdim=True,
-        #                                 dim=1)
-        # Calculate Q(s,o) from the online network
-        option_values = self.option_critics[option_id](critic_obs, None)
-        if num_demo_samples == 0:
-            target_q = action_q_values.clone().detach() - actor_ent_coef * log_prob.clone().detach()
-            option_critic_loss = 0.5 * sum([F.mse_loss(opt_q, target_q) for opt_q in option_values])
+            option_critic_loss = 0.5 * sum([F.mse_loss(opt_val, target_option_values)
+                                            for opt_val in estimated_option_values])
             loss_dict['option_critic_loss'] = option_critic_loss.item()
         else:
-            rl_critic_loss = 0.5 * sum([F.mse_loss(current_q[:-num_demo_samples], target_q_values[:-num_demo_samples])
-                                        for current_q in current_q_values])
-            demo_critic_loss = 0.5 * sum([F.mse_loss(current_q[num_demo_samples:], target_q_values[num_demo_samples:])
-                                          for current_q in current_q_values])
+            rl_critic_loss = 0.5 * sum([F.mse_loss(opt_val[:-num_demo_samples], target_option_values[:-num_demo_samples])
+                                        for opt_val in estimated_option_values])
+            demo_critic_loss = 0.5 * sum([F.mse_loss(opt_val[num_demo_samples:], target_option_values[num_demo_samples:])
+                                          for opt_val in estimated_option_values])
             option_critic_loss = rl_critic_loss + lam * demo_critic_loss
             loss_dict['rl_option_critic_loss'] = rl_critic_loss.item()
             loss_dict['demo_option_critic_loss'] = demo_critic_loss.item()
             loss_dict['option_critic_loss'] = option_critic_loss.item()
 
-        # Optimize the option critic
         option_critic.optimizer.zero_grad()
         option_critic_loss.backward()
         th.nn.utils.clip_grad_norm_(option_critic.parameters(), 0.5)
         option_critic.optimizer.step()
 
-        # Compute actor loss
-        # Alternative: actor_loss = th.mean(log_prob - qf1_pi)
-        # Mean over all critic networks
-        # q_values_pi = th.cat(critic(critic_obs, actions_pi), dim=1)
-        # min_qf_pi, _ = th.min(q_values_pi, dim=1, keepdim=True)
-        # action_q_values, _ = th.min(th.cat(critic(critic_obs, critic_acts), dim=1),
-        #                             keepdim=True,
-        #                             dim=1)
+        # Update Intra-Option-Values Q(s,a,o)
+        # -----------------------------------
+        with th.no_grad():
+            # Calculate termination probabilities for the given observations
+            _, termination_prob = self.sample_termination(option_id, replay_data.observations)
+
+            # Calculate entropy of termination condition
+            termination_ent = -terminator_ent_coef * ((1.0 - termination_prob) * th.log(1.0 - termination_prob) +
+                                                      termination_prob * th.log(termination_prob))
+
+            # Calculate the Option-Values for the given next observations (using the target networks)
+            # Do this for both the current and the next option
+            option_values = self.get_option_values(replay_data.next_observations,
+                                                   option_list=[option_id, next_option_id],
+                                                   use_target_networks=True)
+
+            target_q_values = replay_data.rewards.unsqueeze(dim=-1) + \
+                              (1 - replay_data.dones.unsqueeze(dim=-1)) * self.gamma * \
+                              ((1 - termination_prob) * option_values[..., 0] + termination_prob * option_values[..., 1] +
+                               termination_ent)
+
+        # Get current estimates for Q(s,a,o)
+        critic_acts = self.mask(replay_data.actions, self.actor_act_masks[option_id]) if actor is not None else None
+        estimated_q_values = critic(critic_obs, critic_acts)
+
+        # Compute losses and optimize
+        if num_demo_samples == 0:
+            critic_loss = 0.5 * sum([F.mse_loss(q_values, target_q_values)
+                                     for q_values in estimated_q_values])
+            loss_dict['critic_loss'] = critic_loss.item()
+        else:
+            rl_critic_loss = 0.5 * sum([F.mse_loss(q_values[:-num_demo_samples], target_q_values[:-num_demo_samples])
+                                        for q_values in estimated_q_values])
+            demo_critic_loss = 0.5 * sum([F.mse_loss(q_values[num_demo_samples:], target_q_values[num_demo_samples:])
+                                        for q_values in estimated_q_values])
+            critic_loss = rl_critic_loss + lam * demo_critic_loss
+            loss_dict['rl_critic_loss'] = rl_critic_loss.item()
+            loss_dict['demo_critic_loss'] = demo_critic_loss.item()
+            loss_dict['critic_loss'] = critic_loss.item()
+
+        critic.optimizer.zero_grad()
+        critic_loss.backward()
+        th.nn.utils.clip_grad_norm_(critic.parameters(), 0.5)
+        critic.optimizer.step()
+
+        # Update Actor pi(a|s)
+        # --------------------
+        # Get Q(s,a,o), allowing back propagation through the actions
+        q_values, _ = th.min(th.cat(critic(critic_obs, actions_pi), dim=1), keepdim=True, dim=1)
+
+        # Compute losses and maximize
         if actor is not None:
-            # The actor losses is equal to (-)Q(s,o) i.e. we want to maximize Q(s,o) = Q(s,a,o) - actor_ent_coef * log pi(a)
-            sample_actor_losses = actor_ent_coef * log_prob - action_q_values
+            sample_actor_losses = actor_ent_coef * log_prob - q_values
             if num_demo_samples == 0:
                 actor_loss = sample_actor_losses.mean()
                 loss_dict['actor_loss'] = actor_loss.item()
@@ -815,13 +768,22 @@ class SequenceSAC(object):
             th.nn.utils.clip_grad_norm_(actor.parameters(), 0.5)
             actor.optimizer.step()
 
-        # Compute terminator loss
-        # We don't need to backpropagate through the value estimates since it doesn't explicitly depend on the
-        # termination policy
+        # Update Terminator beta(s')
+        # --------------------------
+        # Calculate termination probabilities in the next states
+        _, termination_prob = self.sample_termination(option_id, replay_data.next_observations)
+        termination_ent = -terminator_ent_coef * ((1.0 - termination_prob) * th.log(1.0 - termination_prob) +
+                                                  termination_prob * th.log(termination_prob))
+
+        # Get the option values for the current and next option, in the next states
+        with th.no_grad():
+            option_vals = self.get_option_values(replay_data.next_observations,
+                                                 option_list=[option_id, next_option_id],
+                                                 use_target_networks=False)
         sample_terminator_losses =\
-            -((1.0 - termination_prob_) * continue_vals +
-              termination_prob_ * terminate_vals +
-              termination_ent_)
+            -((1.0 - termination_prob) * option_vals[..., 0] +
+              termination_prob * option_vals[..., 1] +
+              termination_ent)
         if num_demo_samples == 0:
             terminator_loss = sample_terminator_losses.mean()
             loss_dict['terminator_loss'] = terminator_loss.item()
