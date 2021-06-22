@@ -670,7 +670,7 @@ class SequenceSAC(object):
         # ----------------------------
         with th.no_grad():
             # Get (min) values of Q(s,a,o) from target network
-            q_vals = th.cat(critic_target(critic_obs, actions_pi), dim=1)
+            q_vals = th.cat(critic(critic_obs, actions_pi), dim=1)
             min_q_vals, _ = th.min(q_vals, keepdim=True, dim=1)
 
             target_option_values = min_q_vals - actor_ent_coef * log_prob
@@ -716,7 +716,8 @@ class SequenceSAC(object):
 
             target_q_values = replay_data.rewards.unsqueeze(dim=-1) + \
                               (1 - replay_data.dones.unsqueeze(dim=-1)) * self.gamma * \
-                              ((1 - termination_prob) * option_values[..., 0] + termination_prob * option_values[..., 1] +
+                              ((1 - termination_prob) * option_values[..., 0].unsqueeze(dim=-1) +
+                               termination_prob * option_values[..., 1].unsqueeze(dim=-1) +
                                termination_ent)
 
         # Get current estimates for Q(s,a,o)
@@ -745,11 +746,10 @@ class SequenceSAC(object):
 
         # Update Actor pi(a|s)
         # --------------------
-        # Get Q(s,a,o), allowing back propagation through the actions
-        q_values, _ = th.min(th.cat(critic(critic_obs, actions_pi), dim=1), keepdim=True, dim=1)
-
         # Compute losses and maximize
         if actor is not None:
+            # Get Q(s,a,o), allowing back propagation through the actions
+            q_values, _ = th.min(th.cat(critic(critic_obs, actions_pi), dim=1), keepdim=True, dim=1)
             sample_actor_losses = actor_ent_coef * log_prob - q_values
             if num_demo_samples == 0:
                 actor_loss = sample_actor_losses.mean()
@@ -781,8 +781,8 @@ class SequenceSAC(object):
                                                  option_list=[option_id, next_option_id],
                                                  use_target_networks=False)
         sample_terminator_losses =\
-            -((1.0 - termination_prob) * option_vals[..., 0] +
-              termination_prob * option_vals[..., 1] +
+            -((1.0 - termination_prob) * option_vals[..., 0].unsqueeze(dim=-1) +
+              termination_prob * option_vals[..., 1].unsqueeze(dim=-1) +
               termination_ent)
         if num_demo_samples == 0:
             terminator_loss = sample_terminator_losses.mean()
