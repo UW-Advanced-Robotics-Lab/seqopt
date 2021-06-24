@@ -42,8 +42,8 @@ ENV_CONFIG.actor_params[1].update(
 
 ENV_CONFIG.actor_params[2].update(
     dict(
-        lr_schedule=1e-3,
-        ent_coef=2e-3
+        lr_schedule=1e-4,
+        ent_coef=1e-3
     )
 )
 

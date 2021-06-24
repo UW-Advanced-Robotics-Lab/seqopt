@@ -632,6 +632,15 @@ class SequenceSAC(object):
         # Compute terminator loss
         # We don't need to backpropagate through the value estimates since it doesn't explicitly depend on the
         # termination policy
+        # Calculate value of next options through sampling
+        # with th.no_grad():
+        #     next_actions, _ = self.action_log_prob(option_id, replay_data.next_observations)
+        #     next_option_next_actions, _ = self.action_log_prob(next_option_id, replay_data.next_observations)
+        #     min_qf_pi_, _ = th.min(th.cat(critic(next_critic_obs, next_actions), dim=1), keepdim=True, dim=1)
+        #     min_next_option_qf_pi_, _ = th.min(th.cat(next_critic(next_critic_next_obs, next_option_next_actions),
+        #                                               dim=1),
+        #                                        keepdim=True,
+        #                                        dim=1)
         sample_terminator_losses =\
             ((1.0 - termination_prob_) * (terminator_ent_coef * th.log(1.0 - termination_prob_) - min_qf_pi_) +
              termination_prob_ * (terminator_ent_coef * th.log(termination_prob_) - min_next_option_qf_pi_))

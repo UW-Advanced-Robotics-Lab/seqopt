@@ -1,5 +1,7 @@
 from collections import OrderedDict
 import numpy as np
+from scipy.spatial.qhull import ConvexHull
+from scipy.spatial.qhull import Delaunay
 from scipy.spatial.transform import Rotation
 from shapely.geometry import Point
 from shapely.geometry.polygon import Polygon
@@ -383,8 +385,11 @@ class Door(RobotEnv):
             # Check if handle is grasped
             # print(f"Handle inside grasp: {self._check_handle_in_grasp()}, "
             #       f"Fingertips closed enough ({fingertip_dist}): {(fingertip_dist < 0.55)}")
-            grasped = np.array([np.float32((fingertip_dist < 0.55) and self._check_handle_in_grasp())])
+            in_grasp, eef_cos_angle = self._check_handle_in_grasp()
+            grasped = np.array([np.float32((fingertip_dist < 0.55) and in_grasp)])
+            # print(f"IN grasp: {in_grasp}, Fingertip dist: {fingertip_dist}, Grasped: {grasped}")
             di['grasped'] = grasped
+            di['eef_cos_angle'] = np.array([eef_cos_angle])
 
             di['object-state'] = np.concatenate([
                 di["door_pos"],
@@ -396,7 +401,8 @@ class Door(RobotEnv):
                 di['grasped'],
                 di['fingertip_dist'],
                 di['reach_dist'],
-                di['gripper_euler_angles']
+                di['gripper_euler_angles'],
+                di['eef_cos_angle']
             ])
 
             # Also append handle qpos if we're using a locked door version with rotatable handle
@@ -418,58 +424,92 @@ class Door(RobotEnv):
         handle_id = self.sim.model.geom_name2id('handle')
 
         # Get the position (center) of the handle and the orientation of the handle in world coordinates
-        handle_xpos = self.sim.data.geom_xpos[handle_id]
+        # handle_xpos = self.sim.data.geom_xpos[handle_id]
         handle_xmat = self.sim.data.geom_xmat[handle_id].reshape(3, 3)
-        handle_size_ = self.sim.model.geom_size[handle_id]
-
-        # Inflate handle sizes by 10% (as a margin)
-        handle_size = 1.0 * handle_size_.copy()
-
-        # Get the corners of the cuboid representing the handle (there should be 8 values)
-        assert len(handle_size) == 3, 'Expected a box shape for handle! Got something else!'
-        corners = []
-        for dy in [-handle_size[1], handle_size[1]]:
-            for dz in [-handle_size[2], handle_size[2]]:
-                for dx in [-handle_size[0], handle_size[0]]:
-                    rel_pos = np.dot(handle_xmat, np.array([dx, dy, dz]))
-                    pos = handle_xpos + rel_pos
-                    corners.append(pos)
-
-        # Segregate the corners into points for the 4 faces
-        faces = np.asarray([
-            [corners[0], corners[1], corners[3], corners[2]],  # Front face
-            [corners[2], corners[3], corners[7], corners[6]],  # Top face
-            [corners[4], corners[5], corners[7], corners[6]],  # Back face
-            [corners[0], corners[1], corners[5], corners[4]]   # Bottom face
-        ])
+        # handle_size_ = self.sim.model.geom_size[handle_id]
+        #
+        # # Inflate handle sizes by 10% (as a margin)
+        # handle_size = 1.0 * handle_size_.copy()
+        #
+        # # Get the corners of the cuboid representing the handle (there should be 8 values)
+        # assert len(handle_size) == 3, 'Expected a box shape for handle! Got something else!'
+        # corners = []
+        # for dy in [-handle_size[1], handle_size[1]]:
+        #     for dz in [-handle_size[2], handle_size[2]]:
+        #         for dx in [-handle_size[0], handle_size[0]]:
+        #             rel_pos = np.dot(handle_xmat, np.array([dx, dy, dz]))
+        #             pos = handle_xpos + rel_pos
+        #             corners.append(pos)
+        #
+        # # Segregate the corners into points for the 4 faces
+        # faces = np.asarray([
+        #     [corners[0], corners[1], corners[3], corners[2]],  # Back face
+        #     [corners[2], corners[3], corners[7], corners[6]],  # Top face
+        #     [corners[4], corners[5], corners[7], corners[6]],  # Front face
+        #     [corners[0], corners[1], corners[5], corners[4]]   # Bottom face
+        # ])
 
         # Get the end-effector site and the point on the palm that line along the line extending to the palm
         # from the end effector
         eef_site_id = self.sim.model.site_name2id('gripper0_grip_site')
         end_effector_pos = self.sim.data.site_xpos[eef_site_id]
+
+        # Get the position at the center of all of the fingertips
+        finger_body_names = ['gripper0_thumb_proximal',
+                             'gripper0_thumb_distal',
+                             'gripper0_index_proximal',
+                             'gripper0_index_distal',
+                             'gripper0_pinky_proximal',
+                             'gripper0_pinky_distal']
+        finger_body_ids = [self.sim.model.body_name2id(finger_name) for finger_name in finger_body_names]
+        hull_points = [self.sim.data.body_xpos[id] for id in finger_body_ids]
+        finger_site_names = ['gripper0_thumb_tip_site',
+                             'gripper0_index_tip_site',
+                             'gripper0_pinky_tip_site']
+        finger_site_ids = [self.sim.model.site_name2id(site_name) for site_name in finger_site_names]
+        hull_points.append([self.sim.data.site_xpos[id] for id in finger_site_ids])
+        # end_effector_pos = np.mean(np.vstack(finger_pos), axis=0)
+        # print(f"Finger pos: {finger_pos}, EEf pos: {end_effector_pos}")
+
         palm_site_id = self.sim.model.site_name2id('gripper0_ft_frame')
         palm_pos = self.sim.data.site_xpos[palm_site_id]
-        # line = np.vstack([end_effector_pos - .1 * (palm_pos - end_effector_pos), palm_pos])
-        line = np.vstack([end_effector_pos, palm_pos])
+        hull_points.append(end_effector_pos)
+        hull_points = np.vstack(hull_points)
+        hull = Delaunay(hull_points, qhull_options='QJ')
 
+        # line = np.vstack([end_effector_pos - .1 * (palm_pos - end_effector_pos), palm_pos])
+        # line = np.vstack([end_effector_pos, palm_pos])
+
+        # Also return the (cos) angle of end effector with respect to the z-axis (of the handle)
+        handle_z_axis = np.dot(handle_xmat, np.array([0,0,1]))
+        eef_cos_angle = np.dot(end_effector_pos - palm_pos, handle_z_axis) / np.linalg.norm(end_effector_pos - palm_pos)
+
+        # Create a bunch of test points inside the handle
+        # If any of them are found to be inside the convex hull, the handle is within the grasp
+        handle_corner = self.sim.data.site_xpos[self.door_handle_site_id]
+        alphas = np.linspace(-1,1,10)
+        test_pts = np.vstack([alpha * (handle_corner - self._handle_xpos) + self._handle_xpos for alpha in alphas])
+        in_hull = hull.find_simplex(test_pts)
+        # print(f"IN hull: {in_hull}")
+        return any(in_hull >= 0), eef_cos_angle
         # Check if at least 2 faces are intersected by the line
-        n_faces_intersected = 0
-        for face_id in range(len(faces)):
-            if self._intersect(line, faces[face_id]):
-                # if face_id == 0:
-                #     print("intersected front face")
-                # elif face_id == 1:
-                #     print("intersected top face")
-                # elif face_id == 2:
-                #     print("intersected back face")
-                # else:
-                #     print("intersected bottom face")
-                n_faces_intersected += 1
-            if n_faces_intersected >= 2:
-                # print(f"Handle inside end-effector grasp")
-                return True
-        # print(f"Num faces intersected: {n_faces_intersected}")
-        return False
+        # n_faces_intersected = 0
+        # for face_id in range(len(faces)):
+        #     if self._intersect(line, faces[face_id]):
+        #         # if face_id == 0:
+        #         #     print("intersected front face")
+        #         # elif face_id == 1:
+        #         #     print("intersected top face")
+        #         # elif face_id == 2:
+        #         #     print("intersected back face")
+        #         # else:
+        #         #     print("intersected bottom face")
+        #         n_faces_intersected += 1
+        #     if n_faces_intersected >= 1:
+        #         # print(f"Handle inside end-effector grasp")
+        #         return True, eef_cos_angle
+        # # print(f"Num faces intersected: {n_faces_intersected}")
+        # return False, eef_cos_angle
 
     def _intersect(self, line_pts, plane_pts):
         line_vector = line_pts[1] - line_pts[0]

@@ -10,7 +10,7 @@ from stable_baselines3.common.env_util import make_vec_env
 import torch as th
 
 from seqopt import environments
-from seqopt.algorithms import SequenceSAC
+from seqopt.seqsac import SequenceSAC
 
 
 def get_latest_run_id(log_path: Optional[str] = None, log_name: str = "") -> int:

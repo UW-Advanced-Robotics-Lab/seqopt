@@ -46,7 +46,7 @@ if __name__ == '__main__':
     # NOTE: If the env_id passed in is a dict, we want to create a robosuite environment
     # This requires a hack
     if isinstance(env_config.env, dict):
-        env_config.env.update(dict(has_renderer=True))
+        env_config.env.update(dict(has_renderer=False))
         env_generator = lambda: GymWrapper(suite.make(**env_config.env))
         env_id = env_generator
     else:

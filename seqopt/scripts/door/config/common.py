@@ -31,7 +31,8 @@ def get_env_config():
         use_camera_obs=False,
         control_freq=10,
         gripper_visualizations=True,
-        horizon=500
+        horizon=500,
+        use_latch=False
     )
 
     # Define the observations
@@ -53,11 +54,13 @@ def get_env_config():
         fingertip_dist=np.arange(54, 55),
         reach_dist=np.arange(55, 56),
         gripper_euler_angles=np.arange(56, 59),
+        eef_cos_angle=np.arange(59, 60),
         # XXXXXXXXXXXXXXXXXXXXXXXXX
-        handle_qpos=np.arange(59, 60),
+        # handle_qpos=np.arange(60, 61),
     )
 
     # Define the reward function
+    # We will have 3 options
     # We will have 3 options
     #   - One to reach to the handle
     #   - One to push the handle down
@@ -73,22 +76,25 @@ def get_env_config():
         last_reach_dist, reach_dist = last_obs[..., obs_dict['reach_dist']], \
                                       obs[..., obs_dict['reach_dist']]
         last_grasped, grasped = last_obs[..., obs_dict['grasped']], obs[..., obs_dict['grasped']]
-        last_handle_angle, handle_angle = last_obs[..., obs_dict['handle_qpos']], obs[..., obs_dict['handle_qpos']]
+        # last_handle_angle, handle_angle = last_obs[..., obs_dict['handle_qpos']], obs[..., obs_dict['handle_qpos']]
         last_door_angle, door_angle = last_obs[..., obs_dict['hinge_qpos']], obs[..., obs_dict['hinge_qpos']]
 
         # We want to represent the angles as distances to go
-        last_handle_angle, handle_angle = 1.57 - last_handle_angle, 1.57 - handle_angle
+        # last_handle_angle, handle_angle = 1.57 - last_handle_angle, 1.57 - handle_angle
         last_door_angle, door_angle = 0.4 - last_door_angle, 0.4 - door_angle
 
         # Assign rewards based on the option engaged
         reach_reward = _REACH_REWARD_COEF * (scaled_dist(reach_dist, scale=0.8) -
                                              scaled_dist(last_reach_dist, scale=0.8))
-        grasp_reward = _GRASP_REWARD_COEF * (grasped - last_grasped) * (scaled_dist(last_handle_angle, scale=3.0) +
-                                                                        scaled_dist(last_door_angle, scale=0.8))
-        door_reward = _OPEN_DOOR_REWARD_COEF * grasped * ((scaled_dist(handle_angle, scale=3.0) +
-                                                           scaled_dist(door_angle, scale=0.8)) -
-                                                          (scaled_dist(last_handle_angle, scale=3.0) +
-                                                           scaled_dist(last_door_angle, scale=0.8)))
+        # grasp_reward = _GRASP_REWARD_COEF * (grasped - last_grasped) * (scaled_dist(last_handle_angle, scale=3.0) +
+        #                                                                 scaled_dist(last_door_angle, scale=0.8))
+        grasp_reward = _GRASP_REWARD_COEF * (grasped - last_grasped) * scaled_dist(last_door_angle, scale=0.8)
+        # door_reward = _OPEN_DOOR_REWARD_COEF * grasped * ((scaled_dist(handle_angle, scale=3.0) +
+        #                                                    scaled_dist(door_angle, scale=0.8)) -
+        #                                                   (scaled_dist(last_handle_angle, scale=3.0) +
+        #                                                    scaled_dist(last_door_angle, scale=0.8)))
+        door_reward = _OPEN_DOOR_REWARD_COEF * grasped * (scaled_dist(door_angle, scale=0.8) -
+                                                          scaled_dist(last_door_angle, scale=0.8))
         if len(option_id.shape) < 2:
             option_id = np.expand_dims(option_id, axis=-1)
 
@@ -122,7 +128,7 @@ def get_env_config():
             obs_dict['arm_joints_vel'],
             obs_dict['handle_pos'],
             obs_dict['handle_to_eef_pos'],
-            obs_dict['handle_qpos']
+            # obs_dict['handle_qpos']
         ])
     reach_actor_params.action_mask = np.arange(6)
 
@@ -135,7 +141,7 @@ def get_env_config():
         obs_dict['handle_pos'],
         obs_dict['handle_to_eef_pos'],
         obs_dict['hinge_qpos'],
-        obs_dict['handle_qpos']
+        # obs_dict['handle_qpos']
     ])
 
     reach_terminator_params = TerminatorParams()
@@ -176,7 +182,7 @@ def get_env_config():
         obs_dict['handle_pos'],
         obs_dict['handle_to_eef_pos'],
         obs_dict['hinge_qpos'],
-        obs_dict['handle_qpos']
+        # obs_dict['handle_qpos']
     ])
 
     handle_terminator_params = TerminatorParams()
@@ -185,7 +191,7 @@ def get_env_config():
         obs_dict['gripper_joints_pos'],
         obs_dict['gripper_joints_vel'],
         obs_dict['handle_to_eef_pos'],
-        obs_dict['handle_qpos']
+        # obs_dict['handle_qpos']
     ])
 
     if count_based_exploration:
@@ -201,8 +207,8 @@ def get_env_config():
         dist_boundaries = th.pow(2, th.linspace(-5, -3, steps=10))
 
         # The angle bounds are evenly spread in 10 degree intervals (it's the same for all of roll, pitch and yaw angles)
-        # step_size = np.pi / 18
-        # angle_boundaries = th.arange(-np.pi + step_size, np.pi, step_size)
+        step_size = 1.0 / 8
+        angle_boundaries = th.arange(-1 + step_size, 1, step_size)
 
         # Gripper bounds (for fingertip dist)
         step_size = 1.51 / 10
@@ -214,7 +220,7 @@ def get_env_config():
             return 1.0 / np.sqrt(count)
             # reach_potential = scaled_dist(observation[..., obs_dict['reach_dist']], scale=0.8)
             # reach_potential_max = 1.0
-            # reach_decay = np.log(2) / 0.2
+            # reach_decay = np.log(2) / 0.3
             # decay_factor = np.exp((reach_potential - reach_potential_max) * reach_decay)
             # return decay_factor / np.sqrt(count)
 
@@ -252,7 +258,7 @@ def get_env_config():
         obs_dict['handle_pos'],
         obs_dict['handle_to_eef_pos'],
         obs_dict['hinge_qpos'],
-        obs_dict['handle_qpos']
+        # obs_dict['handle_qpos']
     ])
     pull_actor_params.action_mask = np.arange(6)
 
@@ -265,7 +271,7 @@ def get_env_config():
         obs_dict['handle_pos'],
         obs_dict['handle_to_eef_pos'],
         obs_dict['hinge_qpos'],
-        obs_dict['handle_qpos']
+        # obs_dict['handle_qpos']
     ])
 
     pull_terminator_params = TerminatorParams()
@@ -273,7 +279,7 @@ def get_env_config():
     pull_terminator_params.observation_mask = np.concatenate([
         obs_dict['gripper_joints_pos'],
         obs_dict['handle_to_eef_pos'],
-        obs_dict['handle_qpos']
+        # obs_dict['handle_qpos']
     ])
 
     pull_exploration_params = None
