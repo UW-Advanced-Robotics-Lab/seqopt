@@ -60,6 +60,7 @@ class SequenceSAC(object):
                  train_freq: int = 1,
                  gradient_steps: int = 1,
                  n_episodes_rollout: int = -1,
+                 use_chained_model: bool = True,
                  # Extra parameters
                  tensorboard_log: Optional[str] = None,
                  verbose: int = 0,
@@ -85,6 +86,7 @@ class SequenceSAC(object):
         self.train_freq = train_freq
         self.gradient_steps = gradient_steps
         self.n_episodes_rollout = n_episodes_rollout
+        self.use_chained_model = use_chained_model
         self.tensorboard_log = tensorboard_log
         self.verbose = verbose
         self.seed = seed
@@ -324,7 +326,7 @@ class SequenceSAC(object):
                                                    deterministic=False,
                                                    random=(self.num_timesteps < learning_starts))
             if terminate:
-                self._active_option = (self._active_option + 1) % self.num_options
+                self._active_option = self.get_next_option(active_option, curr_obs_tensor, deterministic=False)
 
             self.num_timesteps += 1
             self.num_option_timesteps[active_option] += 1
@@ -509,6 +511,79 @@ class SequenceSAC(object):
         if self.demo_replay_buffer is not None:
             logger.record(f"train/lam", self._demo_learning_schedule(self._current_progress_remaining))
 
+    def get_option_values(self,
+                          obs: th.Tensor,
+                          option_list: Optional[List] = None,
+                          use_target_networks: bool = False) -> Tuple[th.Tensor, th.Tensor]:
+        # If no option list is provided, we will get the values for all options
+        if option_list is None:
+            option_list = [opt for opt in range(self.num_options)]
+
+        # Store the critics or critic target networks used to compute values, in a list
+        if use_target_networks:
+            critic_nets = [self.critic_targets[opt] for opt in option_list]
+        else:
+            critic_nets = [self.critics[opt] for opt in option_list]
+
+        all_q_vals = []  # Store Q(s,a,o) values
+        all_option_vals = []    # Store Q(s,o) values
+        for option_id, critic_net in zip(option_list, critic_nets):
+            # Convert the observation into the form expected by the critic network(s)
+            critic_obs = self.mask(obs, self.critic_obs_masks[option_id])
+
+            # Sample an action from the associated option and get the action log prob
+            actions_pi, log_prob = self.action_log_prob(option_id, obs)
+            actor = self.actors[option_id]
+            actor_ent_coef = self.actor_ent_coefs[option_id]
+
+            # Convert any action(s) into the form expected by the critic network(s)
+            if actor is None:
+                critic_acts = None
+            else:
+                critic_acts = self.mask(actions_pi, self.actor_act_masks[option_id])
+
+            # Compute Q(s,a,o) from the critic network(s) (we take the min value for stability)
+            q_values = th.cat(critic_net(critic_obs, critic_acts), dim=1)
+            min_q_values, _ = th.min(q_values, dim=1, keepdim=True)
+            all_q_vals.append(min_q_values)
+
+            # Calculate Q(s,o) by accounting for the action entropy i.e. Q(s,o) = Q(s,a,o) - ent_coef * log pi(a)
+            option_vals = min_q_values - actor_ent_coef * log_prob.reshape(-1, 1)
+            all_option_vals.append(option_vals)
+
+        # We stack the option values for each option horizontally i.e. Num obs x Num options tensor size
+        return th.hstack(all_option_vals), th.hstack(all_q_vals)
+
+    def get_softmax_vals(self, option_vals: th.Tensor) -> th.Tensor:
+        return F.softmax(option_vals, dim=-1)
+
+    def get_next_option(self,
+                        prev_option: int,
+                        obs: th.Tensor,
+                        deterministic: bool = False):
+        # Note that only a single observation may be passed in
+        if self.use_chained_model:
+            return (prev_option + 1) % self.num_options
+        else:
+            with th.no_grad():
+                # We choose options using a Boltzmann Distribution of Q(s,a,o) *not Q(s,o)* since the action entropy
+                # is not totally relevant to our end goal
+                _, option_vals = self.get_option_values(obs, use_target_networks=False)
+                option_vals = option_vals.squeeze()
+
+            # If the next option(s) are to be picked stochastically, choose the next option(s) by sampling
+            # from a softmax over the option values
+            if not deterministic:
+                # Compute softmax values
+                softmax_vals = self.get_softmax_vals(option_vals)
+                # print(f"Option values: {option_vals}, Softmax vals: {softmax_vals}")
+                # Sample the index based on the softmax values
+                return np.random.choice(np.arange(self.num_options),
+                                        p=softmax_vals.cpu().numpy())
+            # Otherwise, just choose the option(s) with the highest option value
+            else:
+                return np.argmax(option_vals.cpu().numpy(), axis=-1)
+
     def _optimize(self,
                   option_id: int,
                   replay_data: ReplayBufferSamples,
@@ -519,8 +594,10 @@ class SequenceSAC(object):
         critic, next_critic = self.critics[option_id], self.critics[next_option_id]
         critic_target, next_critic_target = self.critic_targets[option_id], self.critic_targets[next_option_id]
         actor_ent_coef, next_actor_ent_coef = self.actor_ent_coefs[option_id], self.actor_ent_coefs[next_option_id]
-        terminator_ent_coef, next_terminator_ent_coef = self.terminator_ent_coefs[option_id],\
-                                                        self.terminator_ent_coefs[next_option_id]
+        # Using a termination entropy using the "option-critic architecture" is ill-advised because it will
+        # incentivize the agent to always keep the entropy at 0.5, since it can train the policy over options to
+        # re-pick the same option after terminating if needed
+        terminator_ent_coef = self.terminator_ent_coefs[option_id] if self.use_chained_model else 0.0
 
         # Create dictionary for storing loss data
         loss_dict = dict()
@@ -540,9 +617,6 @@ class SequenceSAC(object):
 
         # Break down the action/observation for the critics if action/observation masks need to be applied
         critic_obs = self.mask(replay_data.observations, self.critic_obs_masks[option_id])
-        critic_next_obs = self.mask(replay_data.next_observations, self.critic_obs_masks[option_id])
-        next_critic_obs = self.mask(replay_data.observations, self.critic_obs_masks[next_option_id])
-        next_critic_next_obs = self.mask(replay_data.next_observations, self.critic_obs_masks[next_option_id])
         if actor is None:
             critic_acts = None
         else:
@@ -551,37 +625,47 @@ class SequenceSAC(object):
         # Compute termination probability for the current option in the next states
         _, termination_prob_ = self.sample_termination(option_id, replay_data.next_observations)
 
-        # Compute Q-values/Targets based on interactions for next timestep
         with th.no_grad():
-            # Select action according to current and next option policy
-            next_actions, next_log_prob = self.action_log_prob(option_id, replay_data.next_observations)
-            next_option_actions, next_option_log_prob = self.action_log_prob(next_option_id,
-                                                                             replay_data.next_observations)
-
-            # Compute the next Q values for the given option: min over all critics targets
-            next_q_values = th.cat(critic_target(critic_next_obs, next_actions), dim=1)
-            next_q_values, _ = th.min(next_q_values, dim=1, keepdim=True)
-            # Compute the next Q values for the next option: min over all critics targets
-            next_option_q_values = th.cat(next_critic_target(next_critic_next_obs,
-                                                             next_option_actions),
-                                          dim=1)
-            next_option_q_values, _ = th.min(next_option_q_values, dim=1, keepdim=True)
-
-            # Store the next observation-action q-values for the current option and the next option
-            # This will be re-used in the calculation of termination losses
-            min_qf_pi_, min_next_option_qf_pi_ = next_q_values.clone(), next_option_q_values.clone()
-
-            # add entropy term (this effective calculates the value function; not the "q-value")
-            next_q_values = next_q_values - actor_ent_coef * next_log_prob.reshape(-1, 1)
-            next_option_q_values = next_option_q_values - next_actor_ent_coef * next_option_log_prob.reshape(-1, 1)
-
+            # Clone the termination probability and termination entropy for the current option (calculated above)
             termination_prob = termination_prob_.clone().detach()
-            # td error + entropy term
-            target_q_values = replay_data.rewards.unsqueeze(dim=-1) +\
-                              (1 - replay_data.dones.unsqueeze(dim=-1)) * self.gamma *\
-                              ((1 - termination_prob) * next_q_values + termination_prob * next_option_q_values)
 
-        # Get current Q-values estimates for each critic network
+            # We need to calculate Q(s',o) -and- either Q(s',o') or V(s') [former if using chained model, latter if not]
+            # These values need to be obtained using the target networks for the purpose of computing targets for
+            # training the critics, and from the primary networks for the purpose of training the termination conditions
+            if self.use_chained_model:
+                target_option_vals, target_q_vals = self.get_option_values(replay_data.next_observations,
+                                                                           option_list=[option_id, next_option_id],
+                                                                           use_target_networks=True)
+
+                curr_opt_q = target_option_vals[..., 0].unsqueeze(dim=-1)
+                next_opt_q = target_option_vals[..., 1].unsqueeze(dim=-1)
+
+                # To be used later for terminator losses
+                continue_vals = target_q_vals[..., 0].unsqueeze(dim=-1)
+                terminate_vals = target_q_vals[..., 1].unsqueeze(dim=-1)
+
+                target_q_values = replay_data.rewards.unsqueeze(dim=-1) + \
+                                  (1 - replay_data.dones.unsqueeze(dim=-1)) * self.gamma * \
+                                  ((1 - termination_prob) * curr_opt_q + termination_prob * next_opt_q)
+            else:
+                # Fetch all option values Q(s,o) (and Q(s,a,o) for all options
+                target_option_vals, target_q_vals = self.get_option_values(replay_data.next_observations,
+                                                                           use_target_networks=True)
+                # Get probabilities of all options
+                target_option_probs = self.get_softmax_vals(target_option_vals)
+
+                curr_opt_q = target_option_vals[..., option_id].unsqueeze(dim=-1)
+                target_vf = th.einsum('ij,ij->i', target_option_vals, target_option_probs).unsqueeze(dim=-1)
+
+                # To be used later for terminator losses
+                continue_vals = target_q_vals[..., 0].unsqueeze(dim=-1)
+                terminate_vals = th.einsum('ij,ij->i', target_q_vals, target_option_probs).unsqueeze(dim=-1)
+
+                target_q_values = replay_data.rewards.unsqueeze(dim=-1) + \
+                                  (1 - replay_data.dones.unsqueeze(dim=-1)) * self.gamma * \
+                                  ((1 - termination_prob) * curr_opt_q + termination_prob * target_vf)
+
+        # Get current Q(s,a,o) estimates from the critic of the current option
         # using action from the replay buffer
         current_q_values = critic(critic_obs, critic_acts)
 
@@ -608,9 +692,10 @@ class SequenceSAC(object):
         # Compute actor loss
         # Alternative: actor_loss = th.mean(log_prob - qf1_pi)
         # Mean over all critic networks
-        q_values_pi = th.cat(critic.forward(critic_obs, actions_pi), dim=1)
+        q_values_pi = th.cat(critic(critic_obs, actions_pi), dim=1)
         min_qf_pi, _ = th.min(q_values_pi, dim=1, keepdim=True)
         if actor is not None:
+            # The actor losses is equal to (-)Q(s,o) i.e. we want to maximize Q(s,o) = Q(s,a,o) - ent_coef * log pi(a)
             sample_actor_losses = actor_ent_coef * log_prob - min_qf_pi
             if num_demo_samples == 0:
                 actor_loss = sample_actor_losses.mean()
@@ -632,18 +717,9 @@ class SequenceSAC(object):
         # Compute terminator loss
         # We don't need to backpropagate through the value estimates since it doesn't explicitly depend on the
         # termination policy
-        # Calculate value of next options through sampling
-        # with th.no_grad():
-        #     next_actions, _ = self.action_log_prob(option_id, replay_data.next_observations)
-        #     next_option_next_actions, _ = self.action_log_prob(next_option_id, replay_data.next_observations)
-        #     min_qf_pi_, _ = th.min(th.cat(critic(next_critic_obs, next_actions), dim=1), keepdim=True, dim=1)
-        #     min_next_option_qf_pi_, _ = th.min(th.cat(next_critic(next_critic_next_obs, next_option_next_actions),
-        #                                               dim=1),
-        #                                        keepdim=True,
-        #                                        dim=1)
         sample_terminator_losses =\
-            ((1.0 - termination_prob_) * (terminator_ent_coef * th.log(1.0 - termination_prob_) - min_qf_pi_) +
-             termination_prob_ * (terminator_ent_coef * th.log(termination_prob_) - min_next_option_qf_pi_))
+             ((1.0 - termination_prob_) * (terminator_ent_coef * th.log(1.0 - termination_prob_) - continue_vals) +
+              termination_prob_ * (terminator_ent_coef * th.log(termination_prob_) - terminate_vals))
         if num_demo_samples == 0:
             terminator_loss = sample_terminator_losses.mean()
             loss_dict['terminator_loss'] = terminator_loss.item()

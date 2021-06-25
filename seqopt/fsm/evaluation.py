@@ -144,7 +144,9 @@ def evaluate_policy(
                     env.envs[0].env.render()
 
             if terminate:
-                active_option = (active_option + 1) % model.num_options
+                active_option = model.get_next_option(active_option,
+                                                      th.as_tensor(curr_obs, device=model.device),
+                                                      deterministic=deterministic_terminations)
 
             if np.any(dones):
                 # This resets the execution state of the finite state/option machine back to the default state
