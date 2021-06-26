@@ -56,6 +56,16 @@ def get_env_config():
     _REACH_REWARD_COEF = 25.0
     _GRASP_REWARD_COEF = _PLACE_REWARD_COEF = 100.0
 
+    def composite_task_potential(obs: np.ndarray):
+        reach_dist = obs[..., obs_dict['reach_dist']]
+        grasped = obs[..., obs_dict['grasped']]
+        place_dist = obs[..., obs_dict['place_dist']]
+
+        task_potential = _REACH_REWARD_COEF * scaled_dist(reach_dist, scale=0.8) + \
+                         _PLACE_REWARD_COEF * grasped * scaled_dist(place_dist, scale=0.8)
+
+        return task_potential
+
     def reward_func(last_obs: np.ndarray,
                     obs: np.ndarray,
                     action: np.ndarray,
@@ -96,6 +106,7 @@ def get_env_config():
 
     # Define option level information
     n_options = 3
+    option_names = ['Reach', 'Grasp', 'Place']
 
     # Option 1: REACHING
     reach_actor_params = ActorParams(default_action=th.Tensor([0., 0., 0., 0., -1.]))
@@ -241,7 +252,9 @@ def get_env_config():
         seed=seed,
         obs_dict=obs_dict,
         reward_func=reward_func,
+        task_potential_func=composite_task_potential,
         n_options=n_options,
+        option_names=option_names,
         actor_params=actor_params,
         critic_params=critic_params,
         terminator_params=terminator_params,

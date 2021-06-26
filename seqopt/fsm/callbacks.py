@@ -17,6 +17,7 @@ class OptionsEvalCallback(EvalCallback):
             self,
             eval_env: Union[gym.Env, VecEnv],
             reward_func: Callable,
+            task_potential_func: Callable,
             callback_on_new_best: Optional[BaseCallback] = None,
             n_eval_episodes: int = 5,
             eval_freq: int = 10000,
@@ -40,6 +41,7 @@ class OptionsEvalCallback(EvalCallback):
         )
 
         self.reward_func = reward_func
+        self.task_potential_func = task_potential_func
         self.deterministic_transitions = deterministic_transitions
 
     def init_callback(self, model: "seqopt.algorithms.SequenceSAC") -> None:
@@ -65,6 +67,7 @@ class OptionsEvalCallback(EvalCallback):
                 self.model,
                 self.eval_env,
                 reward_func=self.reward_func,
+                task_potential_func=self.task_potential_func,
                 n_eval_episodes=self.n_eval_episodes,
                 render=self.render,
                 deterministic_actions=self.deterministic,

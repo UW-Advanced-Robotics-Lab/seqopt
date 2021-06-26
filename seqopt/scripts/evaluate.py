@@ -61,6 +61,7 @@ if __name__ == '__main__':
         model=model,
         env=eval_vec_env,
         reward_func=env_config.reward_func,
+        task_potential_func=env_config.task_potential_func,
         n_eval_episodes=args.n_eval_episodes,
         deterministic_actions=not args.stochastic_actions,
         deterministic_terminations=not args.stochastic_terminations,

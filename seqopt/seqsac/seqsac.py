@@ -514,7 +514,7 @@ class SequenceSAC(object):
     def get_option_values(self,
                           obs: th.Tensor,
                           option_list: Optional[List] = None,
-                          use_target_networks: bool = False) -> Tuple[th.Tensor, th.Tensor]:
+                          use_target_networks: bool = False) -> th.Tensor:
         # If no option list is provided, we will get the values for all options
         if option_list is None:
             option_list = [opt for opt in range(self.num_options)]
@@ -526,15 +526,13 @@ class SequenceSAC(object):
             critic_nets = [self.critics[opt] for opt in option_list]
 
         all_q_vals = []  # Store Q(s,a,o) values
-        all_option_vals = []    # Store Q(s,o) values
         for option_id, critic_net in zip(option_list, critic_nets):
             # Convert the observation into the form expected by the critic network(s)
             critic_obs = self.mask(obs, self.critic_obs_masks[option_id])
 
             # Sample an action from the associated option and get the action log prob
-            actions_pi, log_prob = self.action_log_prob(option_id, obs)
+            actions_pi, _ = self.action_log_prob(option_id, obs)
             actor = self.actors[option_id]
-            actor_ent_coef = self.actor_ent_coefs[option_id]
 
             # Convert any action(s) into the form expected by the critic network(s)
             if actor is None:
@@ -547,12 +545,8 @@ class SequenceSAC(object):
             min_q_values, _ = th.min(q_values, dim=1, keepdim=True)
             all_q_vals.append(min_q_values)
 
-            # Calculate Q(s,o) by accounting for the action entropy i.e. Q(s,o) = Q(s,a,o) - ent_coef * log pi(a)
-            option_vals = min_q_values - actor_ent_coef * log_prob.reshape(-1, 1)
-            all_option_vals.append(option_vals)
-
         # We stack the option values for each option horizontally i.e. Num obs x Num options tensor size
-        return th.hstack(all_option_vals), th.hstack(all_q_vals)
+        return th.hstack(all_q_vals)
 
     def get_softmax_vals(self, option_vals: th.Tensor) -> th.Tensor:
         return F.softmax(option_vals, dim=-1)
@@ -568,8 +562,7 @@ class SequenceSAC(object):
             with th.no_grad():
                 # We choose options using a Boltzmann Distribution of Q(s,a,o) *not Q(s,o)* since the action entropy
                 # is not totally relevant to our end goal
-                _, option_vals = self.get_option_values(obs, use_target_networks=False)
-                option_vals = option_vals.squeeze()
+                option_vals = self.get_option_values(obs, use_target_networks=False).squeeze()
 
             # If the next option(s) are to be picked stochastically, choose the next option(s) by sampling
             # from a softmax over the option values
@@ -633,33 +626,33 @@ class SequenceSAC(object):
             # These values need to be obtained using the target networks for the purpose of computing targets for
             # training the critics, and from the primary networks for the purpose of training the termination conditions
             if self.use_chained_model:
-                target_option_vals, target_q_vals = self.get_option_values(replay_data.next_observations,
-                                                                           option_list=[option_id, next_option_id],
-                                                                           use_target_networks=True)
+                target_q_vals = self.get_option_values(replay_data.next_observations,
+                                                       option_list=[option_id, next_option_id],
+                                                       use_target_networks=True)
 
-                curr_opt_q = target_option_vals[..., 0].unsqueeze(dim=-1)
-                next_opt_q = target_option_vals[..., 1].unsqueeze(dim=-1)
+                curr_opt_q = target_q_vals[..., 0].unsqueeze(dim=-1)
+                next_opt_q = target_q_vals[..., 1].unsqueeze(dim=-1)
 
                 # To be used later for terminator losses
-                continue_vals = target_q_vals[..., 0].unsqueeze(dim=-1)
-                terminate_vals = target_q_vals[..., 1].unsqueeze(dim=-1)
+                continue_vals = curr_opt_q.clone()
+                terminate_vals = next_opt_q.clone()
 
                 target_q_values = replay_data.rewards.unsqueeze(dim=-1) + \
                                   (1 - replay_data.dones.unsqueeze(dim=-1)) * self.gamma * \
                                   ((1 - termination_prob) * curr_opt_q + termination_prob * next_opt_q)
             else:
-                # Fetch all option values Q(s,o) (and Q(s,a,o) for all options
-                target_option_vals, target_q_vals = self.get_option_values(replay_data.next_observations,
-                                                                           use_target_networks=True)
+                # Fetch all option values Q(s,o)
+                target_q_vals = self.get_option_values(replay_data.next_observations,
+                                                       use_target_networks=True)
                 # Get probabilities of all options
-                target_option_probs = self.get_softmax_vals(target_option_vals)
+                target_option_probs = self.get_softmax_vals(target_q_vals)
 
-                curr_opt_q = target_option_vals[..., option_id].unsqueeze(dim=-1)
-                target_vf = th.einsum('ij,ij->i', target_option_vals, target_option_probs).unsqueeze(dim=-1)
+                curr_opt_q = target_q_vals[..., option_id].unsqueeze(dim=-1)
+                target_vf = th.einsum('ij,ij->i', target_q_vals, target_option_probs).unsqueeze(dim=-1)
 
                 # To be used later for terminator losses
-                continue_vals = target_q_vals[..., 0].unsqueeze(dim=-1)
-                terminate_vals = th.einsum('ij,ij->i', target_q_vals, target_option_probs).unsqueeze(dim=-1)
+                continue_vals = curr_opt_q.clone()
+                terminate_vals = target_vf.clone()
 
                 target_q_values = replay_data.rewards.unsqueeze(dim=-1) + \
                                   (1 - replay_data.dones.unsqueeze(dim=-1)) * self.gamma * \
@@ -742,6 +735,7 @@ class SequenceSAC(object):
     def learn(self,
               total_timesteps: int,
               reward_func: Callable,
+              task_potential_func: Callable,
               callback: MaybeCallback = None,
               log_interval: int = 1,
               eval_env: Optional[GymEnv] = None,
@@ -754,7 +748,7 @@ class SequenceSAC(object):
               demo_learning_schedule: Schedule = 0.0
               ) -> "SequenceSAC":
         total_timesteps, callback = self._setup_learn(
-            total_timesteps, eval_env, reward_func, callback, eval_freq, n_eval_episodes,
+            total_timesteps, eval_env, reward_func, task_potential_func, callback, eval_freq, n_eval_episodes,
             eval_log_path, reset_num_timesteps, tb_log_name, demo_path, demo_learning_schedule
         )
 
@@ -802,6 +796,7 @@ class SequenceSAC(object):
         total_timesteps: int,
         eval_env: Optional[GymEnv],
         reward_func: Callable,
+        task_potential_func: Callable,
         callback: MaybeCallback = None,
         eval_freq: int = 10000,
         n_eval_episodes: int = 5,
@@ -891,7 +886,13 @@ class SequenceSAC(object):
         utils.configure_logger(self.verbose, self.tensorboard_log, tb_log_name, reset_num_timesteps)
 
         # Create eval callback if needed
-        callback = self._init_eval_callback(reward_func, callback, eval_env, eval_freq, n_eval_episodes, log_path)
+        callback = self._init_eval_callback(reward_func,
+                                            task_potential_func,
+                                            callback,
+                                            eval_env,
+                                            eval_freq,
+                                            n_eval_episodes,
+                                            log_path)
 
         # Set the random seed
         self.set_random_seed(self.seed)
@@ -1059,6 +1060,7 @@ class SequenceSAC(object):
     def _init_eval_callback(
         self,
         reward_func: Callable,
+        task_potential_func: Callable,
         callback: MaybeCallback,
         eval_env: Optional[VecEnv] = None,
         eval_freq: int = 10000,
@@ -1090,6 +1092,7 @@ class SequenceSAC(object):
             eval_callback = OptionsEvalCallback(
                 eval_env,
                 reward_func=reward_func,
+                task_potential_func=task_potential_func,
                 best_model_save_path=log_path,
                 deterministic_actions=True,
                 deterministic_transitions=True,

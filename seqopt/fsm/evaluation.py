@@ -15,6 +15,7 @@ def evaluate_policy(
     model: "seqopt.algorithms.SequenceSAC",
     env: Union[gym.Env, VecEnv],
     reward_func: Callable,
+    task_potential_func: Callable,
     n_eval_episodes: int = 10,
     deterministic_actions: bool = True,
     deterministic_terminations: bool = True,
@@ -22,7 +23,9 @@ def evaluate_policy(
     callback: Optional[Callable] = None,
     reward_threshold: Optional[float] = None,
     return_episode_rewards: bool = False,
-    return_options_used: bool = False
+    return_options_used: bool = False,
+    return_task_potentials: bool = False,
+    return_max_task_potentials: bool = False
 ) -> Union[Tuple[float, float],
            Tuple[List[float], List[int]],
            Tuple[float, float, List[List[int]]],
@@ -65,6 +68,8 @@ def evaluate_policy(
 
     episode_rewards, episode_lengths = [], []
     options_used = [[] for _ in range(n_eval_episodes)]
+    task_potentials = [[] for _ in range(n_eval_episodes)]
+    max_task_potentials = [0.0 for _ in range(n_eval_episodes)]
     for i in range(n_eval_episodes):
         # Avoid double reset, as VecEnv are reset automatically
         if not isinstance(env, VecEnv) or i == 0:
@@ -72,6 +77,14 @@ def evaluate_policy(
         dones, state = False, None
         episode_reward = 0.0
         episode_length = 0
+
+        # Store the initial task potential (for the environment initialization)
+        if return_task_potentials or return_max_task_potentials:
+            task_potential = task_potential_func(obs).squeeze()
+            if task_potential > max_task_potentials[i]:
+                max_task_potentials[i] = task_potential
+            task_potentials[i].append(task_potential_func(obs).squeeze())
+
         while not dones:
             with th.no_grad():
                 obs_tensor = th.as_tensor(obs, device=model.device)
@@ -98,7 +111,11 @@ def evaluate_policy(
                                  clipped_actions,
                                  np.array([[active_option]])).squeeze()
             options_used[i].append(active_option)
-            # with th.no_grad():
+            if return_task_potentials or return_max_task_potentials:
+                task_potential = task_potential_func(curr_obs).squeeze()
+                if task_potential > max_task_potentials[i]:
+                    max_task_potentials[i] = task_potential
+                task_potentials[i].append(task_potential_func(obs).squeeze())            # with th.no_grad():
             #     q_vals = []
             #     obs_tensor = th.as_tensor(obs)
             #     for opt in range(model.num_options):
@@ -163,13 +180,22 @@ def evaluate_policy(
     if reward_threshold is not None:
         assert mean_reward > reward_threshold,\
             "Mean reward below threshold: " f"{mean_reward:.2f} < {reward_threshold:.2f}"
-    if return_episode_rewards:
-        if not return_options_used:
-            return episode_rewards, episode_lengths
-        else:
-            return episode_rewards, episode_lengths, options_used
 
-    if not return_options_used:
-        return mean_reward, std_reward
+    return_vals = []
+    if return_episode_rewards:
+        return_vals.append(episode_rewards)
+        return_vals.append(episode_lengths)
     else:
-        return mean_reward, std_reward, options_used
+        return_vals.append(mean_reward)
+        return_vals.append(std_reward)
+
+    if return_options_used:
+        return_vals.append(options_used)
+
+    if return_task_potentials:
+        return_vals.append(task_potentials)
+
+    if return_max_task_potentials:
+        return_vals.append(max_task_potentials)
+
+    return tuple(return_vals)

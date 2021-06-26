@@ -59,7 +59,7 @@ def get_env_config():
         # handle_qpos=np.arange(60, 61),
     )
 
-    # Define the reward function
+    # Define the composite task potential and the reward function
     # We will have 3 options
     # We will have 3 options
     #   - One to reach to the handle
@@ -67,6 +67,16 @@ def get_env_config():
     #   - One to pull the door
     _REACH_REWARD_COEF = 25.0
     _GRASP_REWARD_COEF = _OPEN_DOOR_REWARD_COEF = 100.0
+
+    def composite_task_potential(obs: np.ndarray):
+        reach_dist = obs[..., obs_dict['reach_dist']]
+        grasped = obs[..., obs_dict['grasped']]
+        door_angle = 0.4 - obs[..., obs_dict['hinge_qpos']]
+
+        task_potential = _REACH_REWARD_COEF * scaled_dist(reach_dist, scale=0.8) + \
+                         _OPEN_DOOR_REWARD_COEF * grasped * scaled_dist(door_angle, scale=0.8)
+
+        return task_potential
 
     def reward_func(last_obs: np.ndarray,
                     obs: np.ndarray,
@@ -113,6 +123,8 @@ def get_env_config():
 
     # Define option level information
     n_options = 3
+    # Define the names of the options (mostly for plotting purposes)
+    option_names = ['Reach', 'Grasp', 'Pull']
 
     # NOTE: Action space is (dx, dy, dz, dax, day, daz, gripper_ctrl)
     # gripper_ctrl = -1 => Open gripper
@@ -295,7 +307,9 @@ def get_env_config():
         seed=seed,
         obs_dict=obs_dict,
         reward_func=reward_func,
+        task_potential_func=composite_task_potential,
         n_options=n_options,
+        option_names=option_names,
         actor_params=actor_params,
         critic_params=critic_params,
         terminator_params=terminator_params,

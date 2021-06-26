@@ -92,6 +92,7 @@ if __name__ == '__main__':
         seed=args.seed,
         step_nums=np.array([]),
         rewards=np.empty((0, args.n_eval_episodes), dtype=np.float32),
+        max_task_potentials=np.empty((0, args.n_eval_episodes), dtype=np.float32),
         checkpoint_dir=args.checkpoint_dir,     # For posterity
     )
 
@@ -101,20 +102,23 @@ if __name__ == '__main__':
         model = algo_cls.load(os.path.join(args.checkpoint_dir, model_file), vec_env, args.device)
 
         # Evaluate the model
-        episode_rewards, _ = evaluate_policy(
+        episode_rewards, _, max_task_potentials = evaluate_policy(
             model=model,
             env=eval_vec_env,
             reward_func=env_config.reward_func,
+            task_potential_func=env_config.task_potential_func,
             n_eval_episodes=args.n_eval_episodes,
             deterministic_actions=not args.stochastic_actions,
             deterministic_terminations=not args.stochastic_terminations,
             render=False,
-            return_episode_rewards=True
+            return_episode_rewards=True,
+            return_max_task_potentials=True
         )
 
         # Store the episode rewards and step num
         save_dict['step_nums'] = np.append(save_dict['step_nums'], step_num)
         save_dict['rewards'] = np.vstack([save_dict['rewards'], episode_rewards])
+        save_dict['max_task_potentials'] = np.vstack([save_dict['max_task_potentials'], max_task_potentials])
 
         print(f"\rNum evaluations: {idx + 1}/{len(step_nums)}")
 

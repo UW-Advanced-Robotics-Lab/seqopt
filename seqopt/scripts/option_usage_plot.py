@@ -16,6 +16,7 @@ import pandas as pd
 import matplotlib
 from matplotlib.colors import ColorConverter, ListedColormap
 from matplotlib.patches import Polygon
+import matplotlib.collections as mcoll
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 
@@ -48,7 +49,10 @@ if __name__ == '__main__':
     # NOTE: If the env_id passed in is a dict, we want to create a robosuite environment
     # This requires a hack
     if isinstance(env_config.env, dict):
-        env_config.env.update(dict(has_renderer=True))
+        if args.no_render:
+            env_config.env.update(dict(has_renderer=False))
+        else:
+            env_config.env.update(dict(has_renderer=True))
         env_generator = lambda: GymWrapper(suite.make(**env_config.env))
         env_id = env_generator
     else:
@@ -65,16 +69,18 @@ if __name__ == '__main__':
 
     # Evaluate the model
     # Evaluate
-    _, _, ep_options = evaluate_policy(
+    _, _, ep_options, ep_potentials = evaluate_policy(
         model=model,
         env=eval_vec_env,
         reward_func=env_config.reward_func,
+        task_potential_func=env_config.task_potential_func,
         n_eval_episodes=1,
         deterministic_actions=not args.stochastic_actions,
         deterministic_terminations=not args.stochastic_terminations,
         render=not args.no_render,
         return_episode_rewards=False,
-        return_options_used=True
+        return_options_used=True,
+        return_task_potentials=True
     )
     ep_options = np.asarray(ep_options[0], dtype=np.int)
     #
@@ -92,7 +98,7 @@ if __name__ == '__main__':
     x, y = np.meshgrid(np.arange(len(ep_options)), np.arange(2), sparse=False, indexing='ij')
 
     # Initialize the plot(s)
-    fig, axes = plt.subplots(nrows=1, ncols=1, squeeze=False)
+    fig, axes = plt.subplots(nrows=2, ncols=1, squeeze=False, sharex=True)
     ax = axes.T[0][0]
 
     # Draw the heatmap
@@ -114,7 +120,7 @@ if __name__ == '__main__':
     ax.set(xlim=(0, x.shape[0] - 1), ylim=(0, x.shape[1] - 1))
 
     # Set x and y dimensions to be equal (in real graph units)
-    ax.set_aspect(100)
+    # ax.set_aspect(100)
 
     # Remove any y-ticks
     ax.set_yticks([])
@@ -124,42 +130,56 @@ if __name__ == '__main__':
         ax.spines[side].set_visible(False)
 
     # Label the axes
-    ax.set_xlabel('Time (steps)')
-    ax.set_ylabel('Option', rotation='horizontal', ha='right', va='center')
+    # ax.set_xlabel('Time (steps)')
+    ax.set_ylabel('Option', rotation='horizontal', ha='right', va='center', fontsize=16)
 
     # Plot the legend
     # Create handles for each option in the legend
     handles = []
-    labels = ['Reach', 'Grasp', 'Place']
     # Get the used colormap
     cmap = plt.get_cmap(cmap_name)
     for idx in range(env_config.n_options):
         handle = mpatches.Patch(facecolor=cmap(cmap_scale * idx / (env_config.n_options - 1)),
-                                label=labels[idx],
+                                label=env_config.option_names[idx],
                                 linestyle=None,
                                 edgecolor=None)
         handles.append(handle)
 
-    # Code obtained from https://stackoverflow.com/questions/42994338/creating-figure-with-exact-size-and-no-padding-and-legend-outside-the-axes/43001737#43001737
-    # to set appropriate bounds for figure and legend
-    padpoints = 3
-    direction = 'h'
-    otrans = ax.figure.transFigure
-    # Define the legend
-    t = ax.legend(handles=handles, title='Option', fancybox=True,
-                  bbox_to_anchor=(1,0.5), loc='center right', bbox_transform=otrans)
-    plt.tight_layout(pad=0)
-    ax.figure.canvas.draw()
-    plt.tight_layout(pad=0)
-    ppar = [0, -padpoints / 72.] if direction == "v" else [-padpoints / 72., 0]
-    trans2 = matplotlib.transforms.ScaledTranslation(ppar[0], ppar[1], fig.dpi_scale_trans) + \
-             ax.figure.transFigure.inverted()
-    tbox = t.get_window_extent().transformed(trans2)
-    bbox = ax.get_position()
-    if direction == "v":
-        ax.set_position([bbox.x0, bbox.y0, bbox.width, tbox.y0 - bbox.y0])
-    else:
-        ax.set_position([bbox.x0, bbox.y0, tbox.x0 - bbox.x0, bbox.height])
+    # Now plot the task potential evolution w.r.t time in the second subplot
+    ep_task_potentials = np.asarray(ep_potentials[0], dtype=np.float)
+    ax = axes.T[0][1]
+
+    # Create a line using a segment to connect each adjacent point
+    num_steps = len(ep_task_potentials[1:])
+    segments = [[(x1, y1), (x2, y2)] for x1, y1, x2, y2 in zip(np.arange(num_steps - 1),
+                                                               ep_task_potentials[:-1],
+                                                               np.arange(1, num_steps),
+                                                               ep_task_potentials[1:])]
+    colors = [cmap(cmap_scale * opt / (env_config.n_options - 1)) for opt in ep_options]
+    lc = mcoll.LineCollection(segments, colors=colors, linewidths=2)
+    ax.add_collection(lc)
+    ax.autoscale()
+    # ax.plot(np.arange(len(ep_task_potentials[1:])), ep_task_potentials[1:])
+
+    for side in ('top', 'right'):
+        ax.spines[side].set_visible(False)
+
+    # Label the axes
+    ax.set_xlabel('Time (steps)', fontsize=16)
+    ax.set_ylabel(r'$\Phi_{task}$', fontsize=16)
+
+    # Adjust the subplots, making space for a legend showing the labels for each option
+    fig.subplots_adjust(left=0.07, right=0.8)
+
+    # Add the legend
+    box = axes.T[0][0].get_position()
+    pad, width = 0.025, 0.1
+    cax = fig.add_axes([box.xmax + pad, box.ymin, width, box.height])
+    for side in ('top', 'right', 'left', 'bottom'):
+        cax.spines[side].set_visible(False)
+    cax.set_xticks([])
+    cax.set_yticks([])
+    cax.legend(handles=handles, title='Option', fancybox=True, loc='center right')
 
     # Plot Option Usage
     fig.show()

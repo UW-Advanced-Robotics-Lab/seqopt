@@ -20,8 +20,10 @@ class EnvConfig:
     seed: int
     obs_dict: Dict[str, np.array]
     reward_func: Callable
+    task_potential_func: Callable
     # Option information
     n_options: int
+    option_names: List[str]
     actor_params: List[ActorParams]
     critic_params: List[CriticParams]
     terminator_params: List[TerminatorParams]

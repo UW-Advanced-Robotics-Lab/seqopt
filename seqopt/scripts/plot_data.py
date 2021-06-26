@@ -9,12 +9,13 @@ import seaborn as sns
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('data_files', type=argparse.FileType('r'), nargs='+', help="Data files for same environment")
+    parser.add_argument('--exp-names', type=str, nargs='+', help="Experiment Names (Defaults to file names)")
     parser.add_argument('--smooth', type=int, default=300, help="No. of models to smooth rewards over")
     args = parser.parse_args()
 
     # TODO(someshdaga):     Ensure that the same environment is used in each data file
 
-    def plot_data(data, xaxis='Step', value="AverageEpRet", condition="Condition1", smooth=1, **kwargs):
+    def plot_data(data, xaxis='Step', value="AverageEpPot", condition="Condition1", smooth=1, **kwargs):
         if smooth > 1:
             """
             smooth data with moving window average.
@@ -51,7 +52,6 @@ if __name__ == '__main__':
         plt.legend(loc='upper center', ncol=6, handlelength=1,
                    mode="expand", borderaxespad=0., prop={'size': 13})
 
-        print(f"x-axis: {np.asarray(data[xaxis])}")
         xscale = np.max(np.asarray(data[xaxis])) > 5e3
         if xscale:
             # Just some formatting niceness: x-axis scale in scientific notation if max x is large
@@ -64,15 +64,23 @@ if __name__ == '__main__':
 
     # Create a pandas dataframe combining all the data files
     datasets = []
-    for data_file in args.data_files:
+
+    # If experiment names have been provided, ensure that there are as many names provided as there are
+    # data files
+    if args.exp_names is not None:
+        assert len(args.data_files) == len(args.exp_names), "Different number of data files and experiment names!"
+        exp_names = args.exp_names
+    else:
+        exp_names = [df.name for df in args.data_files]
+
+    for data_file, exp_name in zip(args.data_files, exp_names):
         data = np.load(data_file.name)
-        exp_name = f"{data['algorithm'].item()}"
 
         # Get number of rewards per timestep
-        num_rewards_per_step = data['rewards'].shape[-1]
+        num_rewards_per_step = data['max_task_potentials'].shape[-1]
 
         # Reshape the rewards into a 1D array
-        rewards = data['rewards'].reshape(-1)
+        rewards = data['max_task_potentials'].reshape(-1)
 
         # Repeat the time indices to correlate with the expanded rewards
         timesteps = np.repeat(data['step_nums'], num_rewards_per_step)
@@ -82,9 +90,9 @@ if __name__ == '__main__':
 
         ts_rews = np.asarray(list(zip(timesteps, rewards, exp_names)))
 
-        ts_df = pd.DataFrame(ts_rews, columns=['Step', 'AverageEpRet', 'Experiment'])
+        ts_df = pd.DataFrame(ts_rews, columns=['Step', 'AverageEpPot', 'Experiment'])
         ts_df['Step'] = ts_df['Step'].astype(float).astype(int)
-        ts_df['AverageEpRet'] = ts_df['AverageEpRet'].astype(float)
+        ts_df['AverageEpPot'] = ts_df['AverageEpPot'].astype(float)
         datasets += [ts_df]
 
     # Plot all graphs

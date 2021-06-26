@@ -114,6 +114,7 @@ if __name__ == '__main__':
         algo.learn(
             total_timesteps=algo_config.total_steps,
             reward_func=env_config.reward_func,
+            task_potential_func=env_config.task_potential_func,
             callback=checkpoint_cb,
             log_interval=algo_config.log_interval,
             eval_env=eval_vec_env,
@@ -126,6 +127,7 @@ if __name__ == '__main__':
         algo.learn(
             total_timesteps=algo_config.total_steps,
             reward_func=env_config.reward_func,
+            task_potential_func=env_config.task_potential_func,
             callback=checkpoint_cb,
             log_interval=algo_config.log_interval,
             eval_env=eval_vec_env,
