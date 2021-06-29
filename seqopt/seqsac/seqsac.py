@@ -550,6 +550,8 @@ class SequenceSAC(object):
 
         # Compute termination probability for the current option in the next states
         _, termination_prob_ = self.sample_termination(option_id, replay_data.next_observations)
+        termination_ent_ = -terminator_ent_coef * ((1.0 - termination_prob_) * th.log(1.0 - termination_prob_) +
+                                                   termination_prob_ * th.log(termination_prob_))
 
         # Compute Q-values/Targets based on interactions for next timestep
         with th.no_grad():
@@ -567,19 +569,20 @@ class SequenceSAC(object):
                                           dim=1)
             next_option_q_values, _ = th.min(next_option_q_values, dim=1, keepdim=True)
 
-            # Store the next observation-action q-values for the current option and the next option
-            # This will be re-used in the calculation of termination losses
-            min_qf_pi_, min_next_option_qf_pi_ = next_q_values.clone(), next_option_q_values.clone()
-
             # add entropy term (this effective calculates the value function; not the "q-value")
             next_q_values = next_q_values - actor_ent_coef * next_log_prob.reshape(-1, 1)
             next_option_q_values = next_option_q_values - next_actor_ent_coef * next_option_log_prob.reshape(-1, 1)
+
+            # Store the next observation-action q-values for the current option and the next option
+            # This will be re-used in the calculation of termination losses
+            min_qf_pi_, min_next_option_qf_pi_ = next_q_values.clone(), next_option_q_values.clone()
 
             termination_prob = termination_prob_.clone().detach()
             # td error + entropy term
             target_q_values = replay_data.rewards.unsqueeze(dim=-1) +\
                               (1 - replay_data.dones.unsqueeze(dim=-1)) * self.gamma *\
-                              ((1 - termination_prob) * next_q_values + termination_prob * next_option_q_values)
+                              ((1 - termination_prob) * next_q_values + termination_prob * next_option_q_values +
+                               termination_ent_)
 
         # Get current Q-values estimates for each critic network
         # using action from the replay buffer
@@ -642,8 +645,9 @@ class SequenceSAC(object):
         #                                        keepdim=True,
         #                                        dim=1)
         sample_terminator_losses =\
-            ((1.0 - termination_prob_) * (terminator_ent_coef * th.log(1.0 - termination_prob_) - min_qf_pi_) +
-             termination_prob_ * (terminator_ent_coef * th.log(termination_prob_) - min_next_option_qf_pi_))
+            -((1.0 - termination_prob_) * min_qf_pi_ +
+              termination_prob_ * min_next_option_qf_pi_ +
+              termination_ent_)
         if num_demo_samples == 0:
             terminator_loss = sample_terminator_losses.mean()
             loss_dict['terminator_loss'] = terminator_loss.item()

@@ -42,7 +42,7 @@ ENV_CONFIG.actor_params[1].update(
 
 ENV_CONFIG.actor_params[2].update(
     dict(
-        lr_schedule=1e-4,
+        lr_schedule=3e-4,
         ent_coef=1e-3
     )
 )
@@ -50,13 +50,13 @@ ENV_CONFIG.actor_params[2].update(
 # Update critic parameters
 ENV_CONFIG.critic_params[0].update(
     dict(
-        lr_schedule=3e-5,
+        lr_schedule=1e-4,
     )
 )
 
 ENV_CONFIG.critic_params[1].update(
     dict(
-        lr_schedule=3e-5,
+        lr_schedule=1e-4,
     )
 )
 
@@ -84,7 +84,7 @@ ENV_CONFIG.terminator_params[1].update(
 ENV_CONFIG.terminator_params[2].update(
     dict(
         lr_schedule=5e-7,
-        ent_coef=0.0
+        ent_coef=5e-1
     )
 )
 
