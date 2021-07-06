@@ -19,6 +19,7 @@ if __name__ == '__main__':
     parser.add_argument('algorithm', type=str.lower, choices=['ppo', 'sac'], help="One of 'ppo' or 'sac'")
     parser.add_argument('environment', type=str.lower, choices=CONFIG_MAP.keys(), help=f"One of {CONFIG_MAP.keys()}")
     parser.add_argument('checkpoint_dir', type=str, help='Path to checkpoint model(s)')
+    parser.add_argument('filename', type=str, help='Filename for generated data')
     parser.add_argument('--stochastic-actions', action='store_true', help='Use stochastic policy for actions')
     parser.add_argument('--stochastic-terminations', action='store_true', help='Use stochastic policy for terminations')
     parser.add_argument('--n-eval-episodes', type=int, default=5,
@@ -123,4 +124,4 @@ if __name__ == '__main__':
         print(f"\rNum evaluations: {idx + 1}/{len(step_nums)}")
 
     # Save the results
-    np.savez(file=f'{args.algorithm}_{args.environment}.npz', **save_dict)
+    np.savez(file=f'{args.filename}.npz', **save_dict)

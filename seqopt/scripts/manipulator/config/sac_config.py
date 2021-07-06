@@ -28,21 +28,21 @@ for option_id in range(ENV_CONFIG.n_options):
 # Update actor parameters
 ENV_CONFIG.actor_params[0].update(
     dict(
-        lr_schedule=3e-4,
-        ent_coef=1e-3
+        lr_schedule=5e-4,
+        ent_coef=1e-4
     )
 )
 
 ENV_CONFIG.actor_params[1].update(
     dict(
-        lr_schedule=3e-4,
-        ent_coef=1e-3
+        lr_schedule=5e-4,
+        ent_coef=1e-4
     )
 )
 
 ENV_CONFIG.actor_params[2].update(
     dict(
-        lr_schedule=3e-4,
+        lr_schedule=5e-4,
         ent_coef=1e-3
     )
 )
@@ -50,19 +50,19 @@ ENV_CONFIG.actor_params[2].update(
 # Update critic parameters
 ENV_CONFIG.critic_params[0].update(
     dict(
-        lr_schedule=3e-4,
+        lr_schedule=3e-5,
     )
 )
 
 ENV_CONFIG.critic_params[1].update(
     dict(
-        lr_schedule=3e-4
+        lr_schedule=3e-5
     )
 )
 
 ENV_CONFIG.critic_params[2].update(
     dict(
-        lr_schedule=3e-4
+        lr_schedule=3e-5
     )
 )
 
@@ -84,7 +84,7 @@ ENV_CONFIG.terminator_params[1].update(
 ENV_CONFIG.terminator_params[2].update(
     dict(
         lr_schedule=5e-7,
-        ent_coef=0.0    # Don't do any entropy regularization for last option. We want to stick with it at the end
+        ent_coef=5e-1
     )
 )
 
@@ -92,7 +92,7 @@ ENV_CONFIG.terminator_params[2].update(
 if ENV_CONFIG.exploration_params[1] is not None:
     ENV_CONFIG.exploration_params[1].update(
         dict(
-            scale=5.0
+            scale=10.0
         )
     )
 
@@ -105,7 +105,7 @@ def demo_schedule(progress_remaining):
 ALGORITHM_CONFIG = SACConfig(
     total_steps=int(1e7),
     buffer_size=int(1e6),
-    gamma=0.99,
+    gamma=0.98,
     batch_size=256,
     n_eval_episodes=3,
     log_interval=1,

@@ -80,6 +80,8 @@ if __name__ == '__main__':
         num_rewards_per_step = data['max_task_potentials'].shape[-1]
 
         # Reshape the rewards into a 1D array
+        # rewards = data['rewards'].reshape(-1)
+
         rewards = data['max_task_potentials'].reshape(-1)
 
         # Repeat the time indices to correlate with the expanded rewards

@@ -525,14 +525,15 @@ class SequenceSAC(object):
         else:
             critic_nets = [self.critics[opt] for opt in option_list]
 
-        all_q_vals = []  # Store Q(s,a,o) values
+        all_option_vals = []    # Store Q(s,o) values
         for option_id, critic_net in zip(option_list, critic_nets):
             # Convert the observation into the form expected by the critic network(s)
             critic_obs = self.mask(obs, self.critic_obs_masks[option_id])
 
             # Sample an action from the associated option and get the action log prob
-            actions_pi, _ = self.action_log_prob(option_id, obs)
+            actions_pi, log_prob = self.action_log_prob(option_id, obs)
             actor = self.actors[option_id]
+            actor_ent_coef = self.actor_ent_coefs[option_id]
 
             # Convert any action(s) into the form expected by the critic network(s)
             if actor is None:
@@ -543,10 +544,13 @@ class SequenceSAC(object):
             # Compute Q(s,a,o) from the critic network(s) (we take the min value for stability)
             q_values = th.cat(critic_net(critic_obs, critic_acts), dim=1)
             min_q_values, _ = th.min(q_values, dim=1, keepdim=True)
-            all_q_vals.append(min_q_values)
+
+            # Calculate Q(s,o) by accounting for the action entropy i.e. Q(s,o) = Q(s,a,o) - ent_coef * log pi(a)
+            option_vals = min_q_values - actor_ent_coef * log_prob.reshape(-1, 1)
+            all_option_vals.append(option_vals)
 
         # We stack the option values for each option horizontally i.e. Num obs x Num options tensor size
-        return th.hstack(all_q_vals)
+        return th.hstack(all_option_vals)
 
     def get_softmax_vals(self, option_vals: th.Tensor) -> th.Tensor:
         return F.softmax(option_vals, dim=-1)
@@ -560,8 +564,6 @@ class SequenceSAC(object):
             return (prev_option + 1) % self.num_options
         else:
             with th.no_grad():
-                # We choose options using a Boltzmann Distribution of Q(s,a,o) *not Q(s,o)* since the action entropy
-                # is not totally relevant to our end goal
                 option_vals = self.get_option_values(obs, use_target_networks=False).squeeze()
 
             # If the next option(s) are to be picked stochastically, choose the next option(s) by sampling
@@ -617,6 +619,8 @@ class SequenceSAC(object):
 
         # Compute termination probability for the current option in the next states
         _, termination_prob_ = self.sample_termination(option_id, replay_data.next_observations)
+        termination_ent_ = -terminator_ent_coef * ((1.0 - termination_prob_) * th.log(1.0 - termination_prob_) +
+                                                   termination_prob_ * th.log(termination_prob_))
 
         with th.no_grad():
             # Clone the termination probability and termination entropy for the current option (calculated above)
@@ -626,12 +630,12 @@ class SequenceSAC(object):
             # These values need to be obtained using the target networks for the purpose of computing targets for
             # training the critics, and from the primary networks for the purpose of training the termination conditions
             if self.use_chained_model:
-                target_q_vals = self.get_option_values(replay_data.next_observations,
-                                                       option_list=[option_id, next_option_id],
-                                                       use_target_networks=True)
+                target_option_vals = self.get_option_values(replay_data.next_observations,
+                                                            option_list=[option_id, next_option_id],
+                                                            use_target_networks=True)
 
-                curr_opt_q = target_q_vals[..., 0].unsqueeze(dim=-1)
-                next_opt_q = target_q_vals[..., 1].unsqueeze(dim=-1)
+                curr_opt_q = target_option_vals[..., 0].unsqueeze(dim=-1)
+                next_opt_q = target_option_vals[..., 1].unsqueeze(dim=-1)
 
                 # To be used later for terminator losses
                 continue_vals = curr_opt_q.clone()
@@ -639,16 +643,17 @@ class SequenceSAC(object):
 
                 target_q_values = replay_data.rewards.unsqueeze(dim=-1) + \
                                   (1 - replay_data.dones.unsqueeze(dim=-1)) * self.gamma * \
-                                  ((1 - termination_prob) * curr_opt_q + termination_prob * next_opt_q)
+                                  ((1 - termination_prob) * curr_opt_q + termination_prob * next_opt_q +
+                                   termination_ent_)
             else:
                 # Fetch all option values Q(s,o)
-                target_q_vals = self.get_option_values(replay_data.next_observations,
-                                                       use_target_networks=True)
+                target_option_vals = self.get_option_values(replay_data.next_observations,
+                                                            use_target_networks=True)
                 # Get probabilities of all options
-                target_option_probs = self.get_softmax_vals(target_q_vals)
+                target_option_probs = self.get_softmax_vals(target_option_vals)
 
-                curr_opt_q = target_q_vals[..., option_id].unsqueeze(dim=-1)
-                target_vf = th.einsum('ij,ij->i', target_q_vals, target_option_probs).unsqueeze(dim=-1)
+                curr_opt_q = target_option_vals[..., option_id].unsqueeze(dim=-1)
+                target_vf = th.einsum('ij,ij->i', target_option_vals, target_option_probs).unsqueeze(dim=-1)
 
                 # To be used later for terminator losses
                 continue_vals = curr_opt_q.clone()
@@ -656,7 +661,8 @@ class SequenceSAC(object):
 
                 target_q_values = replay_data.rewards.unsqueeze(dim=-1) + \
                                   (1 - replay_data.dones.unsqueeze(dim=-1)) * self.gamma * \
-                                  ((1 - termination_prob) * curr_opt_q + termination_prob * target_vf)
+                                  ((1 - termination_prob) * curr_opt_q + termination_prob * target_vf +
+                                   termination_ent_)
 
         # Get current Q(s,a,o) estimates from the critic of the current option
         # using action from the replay buffer
@@ -711,8 +717,9 @@ class SequenceSAC(object):
         # We don't need to backpropagate through the value estimates since it doesn't explicitly depend on the
         # termination policy
         sample_terminator_losses =\
-             ((1.0 - termination_prob_) * (terminator_ent_coef * th.log(1.0 - termination_prob_) - continue_vals) +
-              termination_prob_ * (terminator_ent_coef * th.log(termination_prob_) - terminate_vals))
+             -((1.0 - termination_prob_) * continue_vals +
+               termination_prob_ * terminate_vals +
+               termination_ent_)
         if num_demo_samples == 0:
             terminator_loss = sample_terminator_losses.mean()
             loss_dict['terminator_loss'] = terminator_loss.item()
