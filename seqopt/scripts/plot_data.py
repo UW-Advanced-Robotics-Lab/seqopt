@@ -9,6 +9,7 @@ import seaborn as sns
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('data_files', type=argparse.FileType('r'), nargs='+', help="Data files for same environment")
+    parser.add_argument('type', type=str.lower, choices=['potential', 'reward'], help='Type of plot')
     parser.add_argument('--exp-names', type=str, nargs='+', help="Experiment Names (Defaults to file names)")
     parser.add_argument('--smooth', type=int, default=300, help="No. of models to smooth rewards over")
     args = parser.parse_args()
@@ -60,7 +61,7 @@ if __name__ == '__main__':
         plt.tight_layout(pad=0.5)
 
     # Create figure
-    plt.figure()
+    plt.figure(figsize=(12, 9), dpi=80)
 
     # Create a pandas dataframe combining all the data files
     datasets = []
@@ -73,32 +74,36 @@ if __name__ == '__main__':
     else:
         exp_names = [df.name for df in args.data_files]
 
+    values_name = 'Max Task Potentials' if args.type == 'potential' else 'Rewards'
     for data_file, exp_name in zip(args.data_files, exp_names):
         data = np.load(data_file.name)
 
-        # Get number of rewards per timestep
-        num_rewards_per_step = data['max_task_potentials'].shape[-1]
+        values = data['max_task_potentials'] if args.type == 'potential' else data['rewards']
+
+        # Get number of rewards/potentials per timestep (should be the same)
+        num_values_per_step = values.shape[-1]
+        values = values.reshape(-1)
 
         # Reshape the rewards into a 1D array
         # rewards = data['rewards'].reshape(-1)
+        #
+        # rewards = data['max_task_potentials'].reshape(-1)
 
-        rewards = data['max_task_potentials'].reshape(-1)
-
-        # Repeat the time indices to correlate with the expanded rewards
-        timesteps = np.repeat(data['step_nums'], num_rewards_per_step)
+        # Repeat the time indices to correlate with the expanded rewards/potentials
+        timesteps = np.repeat(data['step_nums'], num_values_per_step)
 
         # Assign the experiment name
         exp_names = len(timesteps) * [exp_name]
 
-        ts_rews = np.asarray(list(zip(timesteps, rewards, exp_names)))
+        ts_rews = np.asarray(list(zip(timesteps, values, exp_names)))
 
-        ts_df = pd.DataFrame(ts_rews, columns=['Step', 'AverageEpPot', 'Experiment'])
+        ts_df = pd.DataFrame(ts_rews, columns=['Step', values_name, 'Experiment'])
         ts_df['Step'] = ts_df['Step'].astype(float).astype(int)
-        ts_df['AverageEpPot'] = ts_df['AverageEpPot'].astype(float)
+        ts_df[values_name] = ts_df[values_name].astype(float)
         datasets += [ts_df]
 
     # Plot all graphs
-    plot_data(datasets, condition='Experiment', smooth=args.smooth)
+    plot_data(datasets, value=values_name, condition='Experiment', smooth=args.smooth)
 
     # Display the figure
     plt.show()
