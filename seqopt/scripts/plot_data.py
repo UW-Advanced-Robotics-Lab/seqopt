@@ -50,18 +50,23 @@ if __name__ == '__main__':
         plt.legend(loc='upper center', ncol=6, handlelength=1,
                    mode="expand", borderaxespad=0., prop={'size': 13})
         """
-        plt.legend(loc='upper center', ncol=6, handlelength=1,
-                   mode="expand", borderaxespad=0., prop={'size': 13})
+        plt.legend(loc='upper left', ncol=1, handlelength=1, frameon=False,
+                   mode=None, borderaxespad=0., prop={'size': 24})
 
         xscale = np.max(np.asarray(data[xaxis])) > 5e3
         if xscale:
             # Just some formatting niceness: x-axis scale in scientific notation if max x is large
             plt.ticklabel_format(style='sci', axis='x', scilimits=(0, 0))
 
+        # Set x-limits
+        # Lower limit: 0, Upper Limit: Nearest 500k of the highest value
+        upper_limit = np.ceil(np.max(np.asarray(data[xaxis])) / 5e5) * 5e5
+        plt.xlim([0, upper_limit])
+
         plt.tight_layout(pad=0.5)
 
     # Create figure
-    plt.figure(figsize=(12, 9), dpi=80)
+    plt.figure(figsize=(12, 9), dpi=150)
 
     # Create a pandas dataframe combining all the data files
     datasets = []
