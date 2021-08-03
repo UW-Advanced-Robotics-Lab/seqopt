@@ -138,7 +138,7 @@ class SequenceSAC(object):
     def add_option(self,
                    actor_params: SACActorParams,
                    critic_params: SACCriticParams,
-                   terminator_params: SACTerminatorParams,
+                   terminator_params: Optional[SACTerminatorParams] = None,
                    exploration_params: Optional[SACExplorationParams] = None) -> None:
         # Store the parameters for posterity
         self._params.append(
@@ -215,18 +215,23 @@ class SequenceSAC(object):
         self.target_update_intervals.append(critic_params.target_update_interval)
 
         # Initialize terminator network
-        terminator_obs_space = gym_subspace_box(self.env.observation_space, terminator_params.observation_mask)
-        terminator = TerminatorPolicy(observation_space=terminator_obs_space,
-                                      lr_schedule=get_schedule_fn(terminator_params.lr_schedule),
-                                      net_arch=terminator_params.net_arch,
-                                      activation_fn=terminator_params.activation_fn,
-                                      optimizer_class=terminator_params.optimizer_class,
-                                      optimizer_kwargs=terminator_params.optimizer_kwargs,
-                                      use_boltzmann=terminator_params.use_boltzmann).to(self.device)
+        if terminator_params is not None:
+            terminator_obs_space = gym_subspace_box(self.env.observation_space, terminator_params.observation_mask)
+            terminator = TerminatorPolicy(observation_space=terminator_obs_space,
+                                          lr_schedule=get_schedule_fn(terminator_params.lr_schedule),
+                                          net_arch=terminator_params.net_arch,
+                                          activation_fn=terminator_params.activation_fn,
+                                          optimizer_class=terminator_params.optimizer_class,
+                                          optimizer_kwargs=terminator_params.optimizer_kwargs,
+                                          use_boltzmann=terminator_params.use_boltzmann).to(self.device)
 
-        self.terminators.append(terminator)
-        self.terminator_ent_coefs.append(th.as_tensor(terminator_params.ent_coef, device=self.device))
-        self.terminator_obs_masks.append(terminator_params.observation_mask)
+            self.terminators.append(terminator)
+            self.terminator_ent_coefs.append(th.as_tensor(terminator_params.ent_coef, device=self.device))
+            self.terminator_obs_masks.append(terminator_params.observation_mask)
+        else:
+            self.terminators.append(None)
+            self.terminator_ent_coefs.append(th.tensor(0., device=self.device))
+            self.terminator_obs_masks.append(None)
 
         # Create a state counter for exploration rewards (if needed)
         if exploration_params is not None:
@@ -249,7 +254,8 @@ class SequenceSAC(object):
                          n_episodes: int = 1,
                          n_steps: int = -1,
                          learning_starts: int = 0,
-                         log_interval: Optional[int] = None) -> RolloutReturn:
+                         log_interval: Optional[int] = None,
+                         quiet: bool = False) -> RolloutReturn:
         episode_rewards, total_timesteps = [], []
         option_timesteps = [0 for _ in range(self.num_options)]
         total_steps, total_episodes = 0, 0
@@ -308,8 +314,9 @@ class SequenceSAC(object):
                 count = self.state_visit_counters[active_option].get_counts(curr_obs_tensor).cpu().numpy()
                 intrinsic_reward = self.exploration_reward_scales[active_option] * \
                                    self.exploration_reward_funcs[active_option](curr_obs, count)
-                # Forward pass through the state counter to register a count for the new state
-                self.state_visit_counters[active_option](curr_obs_tensor)
+                if not quiet:
+                    # Forward pass through the state counter to register a count for the new state
+                    self.state_visit_counters[active_option](curr_obs_tensor)
             else:
                 intrinsic_reward = np.zeros_like(reward)
 
@@ -328,9 +335,10 @@ class SequenceSAC(object):
             if terminate:
                 self._active_option = self.get_next_option(active_option, curr_obs_tensor, deterministic=False)
 
-            self.num_timesteps += 1
-            self.num_option_timesteps[active_option] += 1
-            self.num_option_delta_timesteps[active_option] += 1
+            if not quiet:
+                self.num_timesteps += 1
+                self.num_option_timesteps[active_option] += 1
+                self.num_option_delta_timesteps[active_option] += 1
             option_timesteps[active_option] += 1
             episode_timesteps += 1
             total_steps += 1
@@ -348,7 +356,8 @@ class SequenceSAC(object):
 
             if done:
                 total_episodes += 1
-                self._episode_num += 1
+                if not quiet:
+                    self._episode_num += 1
                 episode_rewards.append(episode_reward)
                 total_timesteps.append(episode_timesteps)
                 # Reset active option to first option
@@ -455,7 +464,7 @@ class SequenceSAC(object):
             else:
                 observation_mask = self.actor_obs_masks[option_id]
                 observation_ = self.mask(observation, observation_mask)
-                action = actor.forward(observation_, deterministic=deterministic)
+                action = actor.forward(observation_, deterministic=deterministic).squeeze()
                 action = self.unmask(default_action, action, action_mask)
             return action
 
@@ -464,6 +473,9 @@ class SequenceSAC(object):
                            observation: th.Tensor,
                            deterministic: bool = False,
                            random: bool = False) -> Tuple[th.Tensor, th.Tensor]:
+        if self.terminators[option_id] is None:
+            return th.tensor(False, device=self.device), th.tensor(0., device=self.device)
+
         if random:
             termination_prob = th.as_tensor(np.random.uniform(0, 1), device=self.device)
             terminate = th.gt(termination_prob, np.random.uniform())
@@ -619,8 +631,11 @@ class SequenceSAC(object):
 
         # Compute termination probability for the current option in the next states
         _, termination_prob_ = self.sample_termination(option_id, replay_data.next_observations)
-        termination_ent_ = -terminator_ent_coef * ((1.0 - termination_prob_) * th.log(1.0 - termination_prob_) +
-                                                   termination_prob_ * th.log(termination_prob_))
+        if terminator is not None:
+            termination_ent_ = -terminator_ent_coef * ((1.0 - termination_prob_) * th.log(1.0 - termination_prob_) +
+                                                       termination_prob_ * th.log(termination_prob_))
+        else:
+            termination_ent_ = th.zeros_like(termination_prob_, device=self.device)
 
         with th.no_grad():
             # Clone the termination probability and termination entropy for the current option (calculated above)
@@ -708,34 +723,36 @@ class SequenceSAC(object):
                 loss_dict['actor_loss'] = actor_loss.item()
 
             # Optimize the actor
+            # print(f"Actor loss: {actor_loss}, Log Prob: {log_prob}, Min qf pi: {min_qf_pi}")
             actor.optimizer.zero_grad()
             actor_loss.backward()
             th.nn.utils.clip_grad_norm_(actor.parameters(), 0.5)
             actor.optimizer.step()
 
-        # Compute terminator loss
+        # Compute terminator loss (if terminators is not None)
         # We don't need to backpropagate through the value estimates since it doesn't explicitly depend on the
         # termination policy
-        sample_terminator_losses =\
-             -((1.0 - termination_prob_) * continue_vals +
-               termination_prob_ * terminate_vals +
-               termination_ent_)
-        if num_demo_samples == 0:
-            terminator_loss = sample_terminator_losses.mean()
-            loss_dict['terminator_loss'] = terminator_loss.item()
-        else:
-            rl_terminator_loss = sample_terminator_losses[:-num_demo_samples].mean()
-            demo_terminator_loss = sample_terminator_losses[num_demo_samples:].mean()
-            terminator_loss = rl_terminator_loss + lam * demo_terminator_loss
-            loss_dict['rl_terminator_loss'] = rl_terminator_loss.item()
-            loss_dict['demo_terminator_loss'] = demo_terminator_loss.item()
-            loss_dict['terminator_loss'] = terminator_loss.item()
+        if terminator is not None:
+            sample_terminator_losses =\
+                 -((1.0 - termination_prob_) * continue_vals +
+                   termination_prob_ * terminate_vals +
+                   termination_ent_)
+            if num_demo_samples == 0:
+                terminator_loss = sample_terminator_losses.mean()
+                loss_dict['terminator_loss'] = terminator_loss.item()
+            else:
+                rl_terminator_loss = sample_terminator_losses[:-num_demo_samples].mean()
+                demo_terminator_loss = sample_terminator_losses[num_demo_samples:].mean()
+                terminator_loss = rl_terminator_loss + lam * demo_terminator_loss
+                loss_dict['rl_terminator_loss'] = rl_terminator_loss.item()
+                loss_dict['demo_terminator_loss'] = demo_terminator_loss.item()
+                loss_dict['terminator_loss'] = terminator_loss.item()
 
-        # Optimizer terminator
-        terminator.optimizer.zero_grad()
-        terminator_loss.backward()
-        th.nn.utils.clip_grad_norm_(terminator.parameters(), 0.1)
-        terminator.optimizer.step()
+            # Optimizer terminator
+            terminator.optimizer.zero_grad()
+            terminator_loss.backward()
+            th.nn.utils.clip_grad_norm_(terminator.parameters(), 0.1)
+            terminator.optimizer.step()
 
         return loss_dict
 
@@ -833,6 +850,10 @@ class SequenceSAC(object):
         self.num_option_timesteps = [0 for _ in range(self.num_options)]
         self.num_option_delta_timesteps = [0 for _ in range(self.num_options)]
 
+        # Ensure that is more than one option exists, terminator networks are defined for all options
+        if self.num_options > 1:
+            assert all([terminator_net is not None for terminator_net in self.terminators])
+
         # Initialize the rollout buffer
         self.replay_buffer = OptionsReplayBuffer(
             buffer_size=self.buffer_size,
@@ -871,18 +892,42 @@ class SequenceSAC(object):
             self.ep_info_buffer = deque(maxlen=100)
             self.ep_success_buffer = deque(maxlen=100)
 
-        if reset_num_timesteps:
-            self.num_timesteps = 0
-            self._episode_num = 0
-        else:
-            # Make sure training timesteps are ahead of the internal counter
-            total_timesteps += self.num_timesteps
-        self._total_timesteps = total_timesteps
-
         # Avoid resetting the environment when calling ``.learn()`` consecutive times
         self._last_obs = obs_to_box_space(self.env.observation_space, self.env.reset()).squeeze()
         if reset_num_timesteps or self._last_obs is None:
             self._last_dones = np.zeros((self.env.num_envs,), dtype=np.bool)
+
+        if reset_num_timesteps:
+            self.num_timesteps = 0
+            self._episode_num = 0
+        # This only happens if we are continuing training a previous model
+        else:
+            # Make sure training timesteps are ahead of the internal counter
+            total_timesteps += self.num_timesteps
+
+            # Since we don't store replay buffers from previous model trainings
+            # We should try to populate the replay buffer to either the maximum or the no. of training steps
+            # observed thus far, using the agent's current policy
+            populate_buffer_samples = min(self.buffer_size, self.num_timesteps)
+
+            # Create dummy callback
+            class DummyCallback(BaseCallback):
+                def _on_step(self) -> bool:
+                    return True
+            dummy_cb = DummyCallback()
+            dummy_cb.init_callback(model=self)
+
+            self.collect_rollouts(self.env,
+                                  reward_func=reward_func,
+                                  callback=dummy_cb,
+                                  replay_buffer=self.replay_buffer,
+                                  n_steps=populate_buffer_samples,
+                                  n_episodes=-1,
+                                  learning_starts=0,
+                                  log_interval=None,
+                                  quiet=True)
+
+        self._total_timesteps = total_timesteps
 
         if eval_env is not None and self.seed is not None:
             eval_env.seed(self.seed)
@@ -954,9 +999,10 @@ class SequenceSAC(object):
             model.critics[option_id].optimizer.load_state_dict(critic_dict['optimizer'])
 
             # Load terminator state dicts
-            terminator_dict = params['terminators'][option_id]
-            model.terminators[option_id].load_state_dict(terminator_dict['params'])
-            model.terminators[option_id].optimizer.load_state_dict(terminator_dict['optimizer'])
+            if params['terminators'][option_id] is not None:
+                terminator_dict = params['terminators'][option_id]
+                model.terminators[option_id].load_state_dict(terminator_dict['params'])
+                model.terminators[option_id].optimizer.load_state_dict(terminator_dict['optimizer'])
 
             # Load state counts
             state_counter_dict = params['state_counters'][option_id]
@@ -1045,12 +1091,15 @@ class SequenceSAC(object):
             )
 
             # Store terminator network and optimizer state dicts
-            state_dicts['terminators'].append(
-                dict(
-                    params=self.terminators[option_id].state_dict(),
-                    optimizer=self.terminators[option_id].optimizer.state_dict()
+            if self.terminators[option_id] is not None:
+                state_dicts['terminators'].append(
+                    dict(
+                        params=self.terminators[option_id].state_dict(),
+                        optimizer=self.terminators[option_id].optimizer.state_dict()
+                    )
                 )
-            )
+            else:
+                state_dicts['terminators'].append(None)
 
             # Store values of state-visit counters
             if self.state_visit_counters[option_id] is not None:

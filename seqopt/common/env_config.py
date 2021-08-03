@@ -26,7 +26,7 @@ class EnvConfig:
     option_names: List[str]
     actor_params: List[ActorParams]
     critic_params: List[CriticParams]
-    terminator_params: List[TerminatorParams]
+    terminator_params: List[Optional[TerminatorParams]]
     exploration_params: List[Optional[ExplorationParams]]
 
     def validate(self):

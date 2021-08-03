@@ -142,7 +142,8 @@ def get_env_config():
             obs_dict['handle_to_eef_pos'],
             # obs_dict['handle_qpos']
         ])
-    reach_actor_params.action_mask = np.arange(6)
+    # reach_actor_params.action_mask = np.arange(6)
+    reach_actor_params.action_mask = None
 
     reach_critic_params = CriticParams()
     reach_critic_params.net_arch = [300, 200]
@@ -172,18 +173,19 @@ def get_env_config():
     # We should try to close the gripper
     handle_default_action[-1] = 1.
     handle_actor_params = ActorParams(default_action=th.as_tensor(handle_default_action))
-    # handle_actor_params.net_arch = [200, 200]
-    # handle_actor_params.observation_mask = \
-    #     np.concatenate([
-    #         obs_dict['arm_joints_pos'],
-    #         obs_dict['arm_joints_vel'],
-    #         obs_dict['gripper_joints_pos'],
-    #         obs_dict['gripper_joints_vel'],
-    #         obs_dict['handle_to_eef_pos'],
-    #         obs_dict['handle_qpos']
-    #     ])
-    # handle_actor_params.action_mask = np.arange(6)
-    handle_actor_params.action_mask = np.array([])
+    handle_actor_params.net_arch = [200, 200]
+    handle_actor_params.observation_mask = \
+        np.concatenate([
+            obs_dict['arm_joints_pos'],
+            obs_dict['arm_joints_vel'],
+            obs_dict['gripper_joints_pos'],
+            obs_dict['gripper_joints_vel'],
+            obs_dict['handle_pos'],
+            obs_dict['handle_to_eef_pos'],
+            obs_dict['hinge_qpos'],
+        ])
+    # handle_actor_params.action_mask = np.array([])
+    handle_actor_params.action_mask = None
 
     handle_critic_params = CriticParams()
     handle_critic_params.net_arch = [300, 200]
@@ -272,7 +274,8 @@ def get_env_config():
         obs_dict['hinge_qpos'],
         # obs_dict['handle_qpos']
     ])
-    pull_actor_params.action_mask = np.arange(6)
+    # pull_actor_params.action_mask = np.arange(6)
+    pull_actor_params.action_mask = None
 
     pull_critic_params = CriticParams()
     pull_critic_params.net_arch = [300, 200]
