@@ -16,6 +16,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('algorithm', type=str.lower, choices=['ppo', 'sac'], help="One of 'ppo' or 'sac'")
     parser.add_argument('environment', type=str.lower, choices=CONFIG_MAP.keys(), help=f"One of {CONFIG_MAP.keys()}")
+    parser.add_argument('--option-critic', action='store_true',
+                        help='Use option-critic execution model. Default: Options Chain')
     parser.add_argument('--continue-training', type=str, default='', help='Path to model zip file')
     parser.add_argument('--eval-log-name', type=str, default='', help='Log name')
     parser.add_argument('--verbose', action='store_true', help='Verbose output')
@@ -94,6 +96,7 @@ if __name__ == '__main__':
                 train_freq=algo_config.train_freq,
                 gradient_steps=algo_config.gradient_steps,
                 n_episodes_rollout=algo_config.n_episodes_rollout,
+                use_chained_model=not args.option_critic,
                 tensorboard_log=tensorboard_log_path,
                 verbose=args.verbose,
                 seed=env_config.seed,
